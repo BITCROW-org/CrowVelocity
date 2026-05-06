@@ -155,8 +155,7 @@ public class VelocityConfiguration implements ProxyConfig {
     }
 
     if (!onlineMode) {
-      logger.warn("The proxy is running in offline mode! This is a security risk and you will NOT "
-          + "receive any support!");
+      logger.info("The proxy is currently running in offline mode.");
     }
 
     switch (playerInfoForwardingMode) {
