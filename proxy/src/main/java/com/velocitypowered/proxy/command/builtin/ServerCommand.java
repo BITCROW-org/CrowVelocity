@@ -32,6 +32,8 @@ import com.velocitypowered.api.proxy.server.RegisteredServer;
 import com.velocitypowered.api.proxy.server.ServerInfo;
 import java.util.List;
 import java.util.Optional;
+
+import com.velocitypowered.proxy.VelocityServer;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.TextComponent;
 import net.kyori.adventure.text.TranslatableComponent;
@@ -95,10 +97,10 @@ public final class ServerCommand {
         .map(ServerConnection::getServerInfo)
         .map(ServerInfo::getName)
         .orElse("<unknown>");
-    executor.sendMessage(Component.translatable(
+    executor.sendMessage(VelocityServer.getPREFIX().append(Component.translatable(
         "velocity.command.server-current-server",
         NamedTextColor.YELLOW,
-        Component.text(currentServer)));
+        Component.text(currentServer))));
 
     final List<RegisteredServer> servers = BuiltinCommandUtil.sortedServerList(server);
     if (servers.size() > MAX_SERVERS_TO_LIST) {

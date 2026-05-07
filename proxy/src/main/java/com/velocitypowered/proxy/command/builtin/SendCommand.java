@@ -30,6 +30,7 @@ import com.velocitypowered.api.proxy.Player;
 import com.velocitypowered.api.proxy.ProxyServer;
 import com.velocitypowered.api.proxy.ServerConnection;
 import com.velocitypowered.api.proxy.server.RegisteredServer;
+import com.velocitypowered.proxy.VelocityServer;
 import com.velocitypowered.proxy.plugin.virtual.VelocityVirtualPlugin;
 import java.util.Objects;
 import java.util.Optional;
@@ -108,9 +109,9 @@ public class SendCommand {
   }
 
   private int usage(final CommandContext<CommandSource> context) {
-    context.getSource().sendMessage(
+    context.getSource().sendMessage(VelocityServer.getPREFIX().append(
         Component.translatable("velocity.command.send-usage", NamedTextColor.YELLOW)
-    );
+    ));
     return Command.SINGLE_SUCCESS;
   }
 

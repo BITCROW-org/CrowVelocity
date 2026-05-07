@@ -31,6 +31,7 @@ import com.velocitypowered.api.permission.Tristate;
 import com.velocitypowered.api.proxy.Player;
 import com.velocitypowered.api.proxy.ProxyServer;
 import com.velocitypowered.api.proxy.server.RegisteredServer;
+import com.velocitypowered.proxy.VelocityServer;
 import com.velocitypowered.proxy.plugin.virtual.VelocityVirtualPlugin;
 import java.util.List;
 import java.util.Optional;
@@ -94,8 +95,9 @@ public class GlistCommand {
   private int totalCount(final CommandContext<CommandSource> context) {
     final CommandSource source = context.getSource();
     sendTotalProxyCount(source);
-    source.sendMessage(
-        Component.translatable("velocity.command.glist-view-all", NamedTextColor.YELLOW));
+    source.sendMessage(VelocityServer.getPREFIX().append(
+            Component.translatable("velocity.command.glist-view-all", NamedTextColor.YELLOW))
+    );
     return 1;
   }
 
@@ -129,7 +131,7 @@ public class GlistCommand {
             ).color(NamedTextColor.YELLOW)
             .arguments(Argument.component(
                     "players", Component.text(Integer.toString(online), NamedTextColor.GREEN)));
-    target.sendMessage(msg.build());
+    target.sendMessage(VelocityServer.getPREFIX().append(msg.build()));
   }
 
   private void sendServerPlayers(final CommandSource target,
