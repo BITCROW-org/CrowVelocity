@@ -39,6 +39,7 @@ import com.velocitypowered.api.util.Favicon;
 import com.velocitypowered.api.util.GameProfile;
 import com.velocitypowered.api.util.ProxyVersion;
 import com.velocitypowered.proxy.command.VelocityCommandManager;
+import com.velocitypowered.proxy.command.bitcrow.FindCMD;
 import com.velocitypowered.proxy.command.bitcrow.LobbyCMD;
 import com.velocitypowered.proxy.command.builtin.CallbackCommand;
 import com.velocitypowered.proxy.command.builtin.GlistCommand;
@@ -181,7 +182,7 @@ public class VelocityServer implements ProxyServer, ForwardingAudience {
   private final ServerListPingHandler serverListPingHandler;
   private ConfigManager configManager;
   private JsonConfig lobbyCfg;
-  private Component PREFIX;
+  private static Component PREFIX;
 
   VelocityServer(final ProxyOptions options) {
     pluginManager = new VelocityPluginManager(this);
@@ -308,6 +309,17 @@ public class VelocityServer implements ProxyServer, ForwardingAudience {
                     .build(),
             lobbyCommand
     );
+
+    final BrigadierCommand findCommand = FindCMD.command(this);
+    commandManager.register(
+            commandManager.metaBuilder(findCommand)
+                    .plugin(VelocityVirtualPlugin.INSTANCE)
+                    .aliases("find")
+                    .build(),
+            findCommand
+    );
+
+
     new GlistCommand(this).register();
     new SendCommand(this).register();
 
@@ -911,7 +923,7 @@ public class VelocityServer implements ProxyServer, ForwardingAudience {
     return lobbyCfg;
   }
 
-  public Component getPREFIX() {
+  public static Component getPREFIX() {
     return PREFIX;
   }
 }
