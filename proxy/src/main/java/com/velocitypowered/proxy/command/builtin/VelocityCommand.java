@@ -84,7 +84,7 @@ public final class VelocityCommand {
         .build();
     final LiteralCommandNode<CommandSource> info = BrigadierCommand.literalArgumentBuilder("info")
         .requires(source -> source.getPermissionValue("velocity.command.info") == Tristate.TRUE)
-        .executes(new Info(server))
+        .executes(new Info(server, server))
         .build();
     final LiteralCommandNode<CommandSource> plugins = BrigadierCommand
         .literalArgumentBuilder("plugins")
@@ -110,7 +110,7 @@ public final class VelocityCommand {
                       .map(LiteralCommandNode::getName)
                       .collect(Collectors.joining("|"));
               final String commandText = USAGE.formatted(availableCommands);
-              source.sendMessage(Component.text(commandText, NamedTextColor.RED));
+              source.sendMessage(server.getPREFIX().append( Component.text(commandText, NamedTextColor.RED)));
               return Command.SINGLE_SUCCESS;
             })
             .requires(commands.stream()
@@ -132,22 +132,22 @@ public final class VelocityCommand {
       final CommandSource source = context.getSource();
       try {
         if (server.reloadConfiguration()) {
-          source.sendMessage(Component.translatable("velocity.command.reload-success",
-              NamedTextColor.GREEN));
+          source.sendMessage(server.getPREFIX().append(Component.translatable("velocity.command.reload-success",
+              NamedTextColor.GREEN)));
         } else {
-          source.sendMessage(Component.translatable("velocity.command.reload-failure",
-              NamedTextColor.RED));
+          source.sendMessage(server.getPREFIX().append(Component.translatable("velocity.command.reload-failure",
+              NamedTextColor.RED)));
         }
       } catch (Exception e) {
         logger.error("Unable to reload configuration", e);
-        source.sendMessage(Component.translatable("velocity.command.reload-failure",
-            NamedTextColor.RED));
+        source.sendMessage(server.getPREFIX().append(Component.translatable("velocity.command.reload-failure",
+            NamedTextColor.RED)));
       }
       return Command.SINGLE_SUCCESS;
     }
   }
 
-  private record Info(ProxyServer server) implements Command<CommandSource> {
+  private record Info(VelocityServer proxy, ProxyServer server) implements Command<CommandSource> {
 
     private static final TextColor VELOCITY_COLOR = TextColor.color(0x09add3);
 
@@ -169,8 +169,8 @@ public final class VelocityCommand {
               Argument.string("vendor", version.getVendor()),
                   Argument.string("name", version.getName()),
                   Argument.component("year", Component.text(LocalDate.now().getYear())));
-      source.sendMessage(velocity);
-      source.sendMessage(copyright);
+      source.sendMessage(proxy.getPREFIX().append(velocity));
+      source.sendMessage(proxy.getPREFIX().append(copyright));
 
       if (version.getName().equals("Velocity")) {
         final TextComponent embellishment = Component.text()
@@ -188,13 +188,13 @@ public final class VelocityCommand {
                     "https://github.com/PaperMC/Velocity"))
                 .build())
             .build();
-        source.sendMessage(embellishment);
+        source.sendMessage(proxy.getPREFIX().append(embellishment));
       }
       return Command.SINGLE_SUCCESS;
     }
   }
 
-  private record Plugins(ProxyServer server) implements Command<CommandSource> {
+  private record Plugins(VelocityServer server) implements Command<CommandSource> {
 
     @Override
     public int run(final CommandContext<CommandSource> context) {
@@ -204,8 +204,8 @@ public final class VelocityCommand {
       final int pluginCount = plugins.size();
 
       if (pluginCount == 0) {
-        source.sendMessage(Component.translatable("velocity.command.no-plugins",
-            NamedTextColor.YELLOW));
+        source.sendMessage(server.getPREFIX().append(Component.translatable("velocity.command.no-plugins",
+            NamedTextColor.YELLOW)));
         return Command.SINGLE_SUCCESS;
       }
 
@@ -223,7 +223,7 @@ public final class VelocityCommand {
           .color(NamedTextColor.YELLOW)
           .arguments(Argument.component("plugins", listBuilder.build()))
           .build();
-      source.sendMessage(output);
+      source.sendMessage(server.getPREFIX().append(output));
       return Command.SINGLE_SUCCESS;
     }
 
@@ -258,11 +258,12 @@ public final class VelocityCommand {
         hoverText.append(Component.text(pdesc));
       });
 
-      return Component.text()
+      return  Component.text()
               .content(description.getId())
               .color(NamedTextColor.GRAY)
               .hoverEvent(HoverEvent.showText(hoverText.build()))
               .build();
+
     }
   }
 
