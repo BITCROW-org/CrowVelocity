@@ -17,7 +17,6 @@
 
 package com.velocitypowered.proxy;
 
-import com.google.common.base.MoreObjects;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.gson.Gson;
@@ -40,12 +39,15 @@ import com.velocitypowered.api.util.Favicon;
 import com.velocitypowered.api.util.GameProfile;
 import com.velocitypowered.api.util.ProxyVersion;
 import com.velocitypowered.proxy.command.VelocityCommandManager;
+import com.velocitypowered.proxy.command.bitcrow.LobbyCMD;
 import com.velocitypowered.proxy.command.builtin.CallbackCommand;
 import com.velocitypowered.proxy.command.builtin.GlistCommand;
 import com.velocitypowered.proxy.command.builtin.SendCommand;
 import com.velocitypowered.proxy.command.builtin.ServerCommand;
 import com.velocitypowered.proxy.command.builtin.ShutdownCommand;
 import com.velocitypowered.proxy.command.builtin.VelocityCommand;
+import com.velocitypowered.proxy.config.ConfigManager;
+import com.velocitypowered.proxy.config.JsonConfig;
 import com.velocitypowered.proxy.config.VelocityConfiguration;
 import com.velocitypowered.proxy.connection.client.ConnectedPlayer;
 import com.velocitypowered.proxy.connection.player.resourcepack.VelocityResourcePackInfo;
@@ -67,6 +69,7 @@ import com.velocitypowered.proxy.util.AddressUtil;
 import com.velocitypowered.proxy.util.ClosestLocaleMatcher;
 import com.velocitypowered.proxy.util.ResourceUtils;
 import com.velocitypowered.proxy.util.VelocityChannelRegistrar;
+import com.velocitypowered.proxy.util.gradient.GradientComponentFormatter;
 import com.velocitypowered.proxy.util.ratelimit.Ratelimiter;
 import com.velocitypowered.proxy.util.ratelimit.Ratelimiters;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
@@ -74,6 +77,8 @@ import io.netty.bootstrap.Bootstrap;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelInitializer;
 import io.netty.channel.EventLoopGroup;
+
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.InetAddress;
@@ -104,6 +109,7 @@ import net.kyori.adventure.audience.Audience;
 import net.kyori.adventure.audience.ForwardingAudience;
 import net.kyori.adventure.key.Key;
 import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.format.TextColor;
 import net.kyori.adventure.text.minimessage.translation.MiniMessageTranslationStore;
 import net.kyori.adventure.translation.GlobalTranslator;
 import org.apache.logging.log4j.LogManager;
@@ -173,6 +179,9 @@ public class VelocityServer implements ProxyServer, ForwardingAudience {
   private final VelocityScheduler scheduler;
   private final VelocityChannelRegistrar channelRegistrar = new VelocityChannelRegistrar();
   private final ServerListPingHandler serverListPingHandler;
+  private ConfigManager configManager;
+  private JsonConfig lobbyCfg;
+  private Component PREFIX;
 
   VelocityServer(final ProxyOptions options) {
     pluginManager = new VelocityPluginManager(this);
@@ -184,6 +193,11 @@ public class VelocityServer implements ProxyServer, ForwardingAudience {
     servers = new ServerMap(this);
     serverListPingHandler = new ServerListPingHandler(this);
     this.options = options;
+    configManager = new ConfigManager(this, new File("config"));
+    lobbyCfg = configManager.load("lobby");
+    PREFIX = GradientComponentFormatter.applyGradient("<#9900ff>BITCROW<#ff55ff>")
+            .append(Component.text(" | ")
+                    .color(TextColor.color(0xA8A8A8)));
   }
 
   public KeyPair getServerKeyPair() {
@@ -202,13 +216,13 @@ public class VelocityServer implements ProxyServer, ForwardingAudience {
     String implVersion;
     String implVendor;
     if (pkg != null) {
-      implName = MoreObjects.firstNonNull(pkg.getImplementationTitle(), "Velocity");
-      implVersion = MoreObjects.firstNonNull(pkg.getImplementationVersion(), "<unknown>");
-      implVendor = MoreObjects.firstNonNull(pkg.getImplementationVendor(), "Velocity Contributors");
+      implName = "VeloCrow"; //MoreObjects.firstNonNull(pkg.getImplementationTitle(), "Velocity");
+      implVersion = "1.0.0"; //MoreObjects.firstNonNull(pkg.getImplementationVersion(), "<unknown>");
+      implVendor = "BITCROW's Proxy Software"; //MoreObjects.firstNonNull(pkg.getImplementationVendor(), "Velocity Contributors");
     } else {
-      implName = "Velocity";
-      implVersion = "<unknown>";
-      implVendor = "Velocity Contributors";
+      implName = "VeloCrow";
+      implVersion = "1.0.0";
+      implVendor = "BITCROW's Proxy Software";
     }
 
     return new ProxyVersion(implName, implVendor, implVersion);
@@ -217,8 +231,8 @@ public class VelocityServer implements ProxyServer, ForwardingAudience {
   private VelocityPluginContainer createVirtualPlugin() {
     ProxyVersion version = getVersion();
     PluginDescription description = new VelocityPluginDescription(
-        "velocity", version.getName(), version.getVersion(), "The Velocity proxy",
-            version.getName().equals("Velocity") ? VELOCITY_URL : null,
+        "velocrow", version.getName(), version.getVersion(), "The VeloCrow proxy",
+            version.getName().equals("VeloCrow") ? VELOCITY_URL : null,
             ImmutableList.of(version.getVendor()), Collections.emptyList(), null);
     VelocityPluginContainer container = new VelocityPluginContainer(description);
     container.setInstance(VelocityVirtualPlugin.INSTANCE);
@@ -239,6 +253,7 @@ public class VelocityServer implements ProxyServer, ForwardingAudience {
   void start() {
     logger.info("Booting up {} {}...", getVersion().getName(), getVersion().getVersion());
     console.setupStreams();
+    logger.info(lobbyCfg.getString("lobby.server", "default") + " is the lobbysystem server");
     pluginManager.registerPlugin(this.createVirtualPlugin());
 
     // Yes, you're reading that correctly. We're generating a 1024-bit RSA keypair. Sounds
@@ -283,6 +298,15 @@ public class VelocityServer implements ProxyServer, ForwardingAudience {
             .aliases("end", "stop")
             .build(),
         shutdownCommand
+    );
+
+    final BrigadierCommand lobbyCommand = LobbyCMD.command(this);
+    commandManager.register(
+            commandManager.metaBuilder(lobbyCommand)
+                    .plugin(VelocityVirtualPlugin.INSTANCE)
+                    .aliases("lobby")
+                    .build(),
+            lobbyCommand
     );
     new GlistCommand(this).register();
     new SendCommand(this).register();
@@ -877,5 +901,17 @@ public class VelocityServer implements ProxyServer, ForwardingAudience {
   @Override
   public ResourcePackInfo.Builder createResourcePackBuilder(String url) {
     return new VelocityResourcePackInfo.BuilderImpl(url);
+  }
+
+  public ConfigManager getConfigManager() {
+    return configManager;
+  }
+
+  public JsonConfig getLobbyCfg() {
+    return lobbyCfg;
+  }
+
+  public Component getPREFIX() {
+    return PREFIX;
   }
 }
