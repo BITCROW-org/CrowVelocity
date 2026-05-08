@@ -1,7 +1,10 @@
 package com.velocitypowered.proxy.mysql;
 
+import com.velocitypowered.proxy.VelocityServer;
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
+
+import java.sql.Connection;
 
 public class MySQLManager {
 
@@ -11,23 +14,30 @@ public class MySQLManager {
         try {
             HikariConfig config = new HikariConfig();
 
-            config.setJdbcUrl("jdbc:mysql://" + host + ":" + port + "/" + database + "?allowPublicKeyRetrieval=true&useSSL=false");
+            config.setJdbcUrl("jdbc:mysql://" + host + ":" + port + "/" + database + "?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC");
             config.setUsername(user);
             config.setPassword(password);
 
+            config.setDriverClassName("com.mysql.cj.jdbc.Driver");
+
             config.setMaximumPoolSize(10);
             config.setMinimumIdle(2);
-
-            config.setConnectionTimeout(3000);
+            config.setConnectionTimeout(5000);
             config.setInitializationFailTimeout(-1);
 
             this.dataSource = new HikariDataSource(config);
 
-            System.out.println("[MySQL] Connected!");
-            return true;
+            try (Connection conn = dataSource.getConnection()) {
+                if (conn.isValid(2)) {
+                    System.out.println("[MySQL] Login successful!");
+                    return true;
+                }
+            }
+
+            return false;
 
         } catch (Exception e) {
-            System.err.println("[MySQL] WARNING: connection failed, running without DB");
+            System.err.println("[MySQL] connection failed:" + e.getMessage());
             this.dataSource = null;
             return false;
         }

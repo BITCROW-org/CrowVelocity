@@ -46,6 +46,7 @@ public class ConfigManager {
 
         JsonConfig config = new JsonConfig(file, gson);
         config.load();
+
         configs.put(name, config);
         return config;
     }
@@ -62,6 +63,14 @@ public class ConfigManager {
             Files.copy(in, target.toPath());
         } catch (Exception ignored) {
         }
+    }
+
+    public JsonConfig reload(String name) {
+        JsonConfig config = configs.get(name);
+        if (config != null) {
+            config.load();
+        }
+        return config;
     }
 
     public JsonConfig get(String name) {
