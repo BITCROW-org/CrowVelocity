@@ -56,6 +56,7 @@ import com.velocitypowered.proxy.connection.util.ServerListPingHandler;
 import com.velocitypowered.proxy.console.VelocityConsole;
 import com.velocitypowered.proxy.crypto.EncryptionUtils;
 import com.velocitypowered.proxy.event.VelocityEventManager;
+import com.velocitypowered.proxy.mysql.MySQLManager;
 import com.velocitypowered.proxy.network.ConnectionManager;
 import com.velocitypowered.proxy.plugin.VelocityPluginManager;
 import com.velocitypowered.proxy.plugin.loader.VelocityPluginContainer;
@@ -181,7 +182,9 @@ public class VelocityServer implements ProxyServer, ForwardingAudience {
   private final VelocityChannelRegistrar channelRegistrar = new VelocityChannelRegistrar();
   private final ServerListPingHandler serverListPingHandler;
   private ConfigManager configManager;
+  private MySQLManager mySQLManager;
   private JsonConfig lobbyCfg;
+  private JsonConfig mysqlCfg;
   private static Component PREFIX;
 
   VelocityServer(final ProxyOptions options) {
@@ -196,9 +199,11 @@ public class VelocityServer implements ProxyServer, ForwardingAudience {
     this.options = options;
     configManager = new ConfigManager(this, new File("config"));
     lobbyCfg = configManager.load("lobby");
+    mysqlCfg = configManager.load("mysql");
     PREFIX = GradientComponentFormatter.applyGradient("<#9900ff>BITCROW<#ff55ff>")
             .append(Component.text(" | ")
                     .color(TextColor.color(0xA8A8A8)));
+    mySQLManager = new MySQLManager();
   }
 
   public KeyPair getServerKeyPair() {
@@ -254,7 +259,7 @@ public class VelocityServer implements ProxyServer, ForwardingAudience {
   void start() {
     logger.info("Booting up {} {}...", getVersion().getName(), getVersion().getVersion());
     console.setupStreams();
-    logger.info(lobbyCfg.getString("lobby.server", "default") + " is the lobbysystem server");
+    //logger.info(lobbyCfg.getString("lobby.server", "default") + " is the lobbysystem server");
     pluginManager.registerPlugin(this.createVirtualPlugin());
 
     // Yes, you're reading that correctly. We're generating a 1024-bit RSA keypair. Sounds
@@ -340,6 +345,21 @@ public class VelocityServer implements ProxyServer, ForwardingAudience {
     ipAttemptLimiter = Ratelimiters.createWithMilliseconds(configuration.getLoginRatelimit());
     commandRateLimiter = Ratelimiters.createWithMilliseconds(configuration.getCommandRatelimit());
     tabCompleteRateLimiter = Ratelimiters.createWithMilliseconds(configuration.getTabCompleteRatelimit());
+
+    boolean ok = mySQLManager.connect(
+            getMysqlCfg().getString("mysql.host", "localhost"),
+            getMysqlCfg().getInt("mysql.port", 3306),
+            getMysqlCfg().getString("mysql.database", "testdb"),
+            getMysqlCfg().getString("mysql.username", "root"),
+            getMysqlCfg().getString("mysql.password", "password")
+    );
+
+    if (ok) {
+      logger.info("[Main] MySQL enabled, continuing...");
+    } else {
+      logger.warn("[Main] MySQL disabled, skipping...");
+    }
+
     loadPlugins();
 
     // Go ahead and fire the proxy initialization event. We block since plugins should have a chance
@@ -921,6 +941,14 @@ public class VelocityServer implements ProxyServer, ForwardingAudience {
 
   public JsonConfig getLobbyCfg() {
     return lobbyCfg;
+  }
+
+  public JsonConfig getMysqlCfg() {
+    return mysqlCfg;
+  }
+
+  public MySQLManager getMySQLManager() {
+    return mySQLManager;
   }
 
   public static Component getPREFIX() {
