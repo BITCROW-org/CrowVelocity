@@ -4,6 +4,7 @@ import com.velocitypowered.proxy.bitcrow.mysql.MySQLManager;
 
 import java.sql.Connection;
 import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import java.util.*;
 import java.util.concurrent.*;
 
@@ -150,6 +151,44 @@ public class PlayerManager {
             } catch (Exception e) {
                 e.printStackTrace();
             }
+        }, executor);
+    }
+    public void reloadPlayersFromDatabase() {
+
+        CompletableFuture.runAsync(() -> {
+
+            Map<UUID, PlayerData> uuidMap = new ConcurrentHashMap<>();
+            Map<String, PlayerData> nameMap = new ConcurrentHashMap<>();
+
+            try (Connection conn = mySQLManager.getConnection();
+                 PreparedStatement statement = conn.prepareStatement("""
+                SELECT * FROM players
+             """)) {
+
+                ResultSet rs = statement.executeQuery();
+
+                while (rs.next()) {
+
+                    PlayerData data = new PlayerData(
+                            UUID.fromString(rs.getString("uuid")),
+                            rs.getString("username"),
+                            rs.getString("current_server")
+                    );
+
+                    uuidMap.put(data.getUuid(), data);
+                    nameMap.put(data.getUsername().toLowerCase(), data);
+                }
+
+                playersByUUID.clear();
+                playersByUUID.putAll(uuidMap);
+
+                playersByName.clear();
+                playersByName.putAll(nameMap);
+
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+
         }, executor);
     }
 }

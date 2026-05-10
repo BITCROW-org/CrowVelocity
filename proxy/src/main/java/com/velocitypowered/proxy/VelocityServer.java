@@ -39,9 +39,11 @@ import com.velocitypowered.api.util.Favicon;
 import com.velocitypowered.api.util.GameProfile;
 import com.velocitypowered.api.util.ProxyVersion;
 import com.velocitypowered.proxy.bitcrow.player.PlayerManager;
+import com.velocitypowered.proxy.bitcrow.scheduler.TablistScheduler;
 import com.velocitypowered.proxy.command.VelocityCommandManager;
 import com.velocitypowered.proxy.command.bitcrow.FindCMD;
 import com.velocitypowered.proxy.command.bitcrow.LobbyCMD;
+import com.velocitypowered.proxy.command.bitcrow.WartungCMD;
 import com.velocitypowered.proxy.command.builtin.CallbackCommand;
 import com.velocitypowered.proxy.command.builtin.GlistCommand;
 import com.velocitypowered.proxy.command.builtin.SendCommand;
@@ -88,6 +90,7 @@ import java.net.http.HttpClient;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.KeyPair;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -298,11 +301,8 @@ public class VelocityServer implements ProxyServer, ForwardingAudience {
 
     loadPlugins();
 
-    // Go ahead and fire the proxy initialization event. We block since plugins should have a chance
-    // to fully initialize before we accept any connections to the server.
     eventManager.fire(new ProxyInitializeEvent()).join();
 
-    // init console permissions after plugins are loaded
     console.setupPermissions();
 
     final Integer port = this.options.getPort();
@@ -330,6 +330,7 @@ public class VelocityServer implements ProxyServer, ForwardingAudience {
     } else {
       logger.warn("debug environment, metrics is disabled!");
     }
+    registerScheduler();
   }
 
   private void connectMySQL() {
@@ -397,6 +398,15 @@ public class VelocityServer implements ProxyServer, ForwardingAudience {
                     .aliases("find")
                     .build(),
             findCommand
+    );
+
+    final BrigadierCommand vwartungCommand = WartungCMD.command(this);
+    commandManager.register(
+            commandManager.metaBuilder(vwartungCommand)
+                    .plugin(VelocityVirtualPlugin.INSTANCE)
+                    .aliases("vwartung")
+                    .build(),
+            vwartungCommand
     );
 
 
@@ -504,7 +514,6 @@ public class VelocityServer implements ProxyServer, ForwardingAudience {
       logger.error("Couldn't load plugins", e);
     }
 
-    // Register the plugin main classes so that we can fire the proxy initialize event
     for (PluginContainer plugin : pluginManager.getPlugins()) {
       Optional<?> instance = plugin.getInstance();
       if (instance.isPresent()) {
@@ -550,8 +559,6 @@ public class VelocityServer implements ProxyServer, ForwardingAudience {
       return false;
     }
 
-    // Re-register servers. If a server is being replaced, make sure to note what players need to
-    // move back to a fallback server.
     Collection<ConnectedPlayer> evacuate = new ArrayList<>();
     for (Map.Entry<String, String> entry : newConfiguration.getServers().entrySet()) {
       ServerInfo newInfo = new ServerInfo(entry.getKey(), AddressUtil.parseAddress(entry.getValue()));
@@ -571,7 +578,6 @@ public class VelocityServer implements ProxyServer, ForwardingAudience {
       }
     }
 
-    // If we had any players to evacuate, let's move them now. Wait until they are all moved off.
     if (!evacuate.isEmpty()) {
       CountDownLatch latch = new CountDownLatch(evacuate.size());
       for (ConnectedPlayer player : evacuate) {
@@ -599,7 +605,6 @@ public class VelocityServer implements ProxyServer, ForwardingAudience {
       }
     }
 
-    // If we have a new bind address, bind to it
     if (!configuration.getBind().equals(newConfiguration.getBind())) {
       this.cm.bind(newConfiguration.getBind());
       this.cm.close(configuration.getBind());
@@ -641,9 +646,6 @@ public class VelocityServer implements ProxyServer, ForwardingAudience {
 
     Runnable shutdownProcess = () -> {
       logger.info("Shutting down the proxy...");
-
-      // Shutdown the connection manager, this should be
-      // done first to refuse new connections
       onShutdown();
       cm.shutdown();
 
@@ -670,9 +672,6 @@ public class VelocityServer implements ProxyServer, ForwardingAudience {
         boolean timedOut = false;
 
         try {
-          // Wait for the connections finish tearing down, this
-          // makes sure that all the disconnect events are being fired
-
           CompletableFuture<Void> playersTeardownFuture = CompletableFuture.allOf(players.stream()
                   .map(ConnectedPlayer::getTeardownFuture)
                   .toArray((IntFunction<CompletableFuture<Void>[]>) CompletableFuture[]::new));
@@ -693,11 +692,9 @@ public class VelocityServer implements ProxyServer, ForwardingAudience {
           logger.error("Your plugins took over 10 seconds to shut down.");
         }
       } catch (InterruptedException e) {
-        // Not much we can do about this...
         Thread.currentThread().interrupt();
       }
 
-      // Since we manually removed the shutdown hook, we need to handle the shutdown ourselves.
       LogManager.shutdown();
 
       shutdown = true;
@@ -734,15 +731,23 @@ public class VelocityServer implements ProxyServer, ForwardingAudience {
     }
   }
 
+  /**
+   *
+   * @param reason message to kick online players with
+   */
   @Override
   public void shutdown(Component reason) {
     shutdown(true, reason);
   }
 
+  /**
+   * Shuts down the proxy.
+   */
   @Override
   public void shutdown() {
     shutdown(true);
   }
+
 
   @Override
   public void closeListeners() {
@@ -803,7 +808,6 @@ public class VelocityServer implements ProxyServer, ForwardingAudience {
         existing.disconnect(Component.translatable("multiplayer.disconnect.duplicate_login"));
       }
 
-      // We can now replace the entries as needed.
       connectionsByName.put(lowerName, connection);
       connectionsByUuid.put(connection.getUniqueId(), connection);
     }
@@ -920,9 +924,20 @@ public class VelocityServer implements ProxyServer, ForwardingAudience {
   public InetSocketAddress getBoundAddress() {
     if (configuration == null) {
       throw new IllegalStateException(
-          "No configuration"); // even though you'll never get the chance... heh, heh
+          "No configuration");
     }
     return configuration.getBind();
+  }
+
+  public void registerScheduler() {
+    this.getScheduler()
+            .buildTask(VelocityVirtualPlugin.INSTANCE, () -> {
+              playerManager.reloadPlayersFromDatabase();
+            })
+            .repeat(Duration.ofSeconds(30))
+            .schedule();
+
+    TablistScheduler.startUpdater(this);
   }
 
   @Override

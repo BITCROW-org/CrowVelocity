@@ -27,9 +27,11 @@ public class FindCMD {
                                 .suggests((context, builder) -> {
                                     String input = builder.getRemaining().toLowerCase();
 
-                                    server.getAllPlayers().forEach(p -> {
-                                        if (p.getUsername().toLowerCase().startsWith(input)) {
-                                            builder.suggest(p.getUsername());
+                                    server.getPlayerManager().getPlayersAlphabetically().forEach(data -> {
+                                        String name = data.getUsername();
+
+                                        if (name != null && name.toLowerCase().startsWith(input)) {
+                                            builder.suggest(name);
                                         }
                                     });
 
