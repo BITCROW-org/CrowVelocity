@@ -58,6 +58,7 @@ import com.velocitypowered.proxy.console.VelocityConsole;
 import com.velocitypowered.proxy.crypto.EncryptionUtils;
 import com.velocitypowered.proxy.event.VelocityEventManager;
 import com.velocitypowered.proxy.bitcrow.mysql.MySQLManager;
+import com.velocitypowered.proxy.event.bitcrow.ServerPingListener;
 import com.velocitypowered.proxy.network.ConnectionManager;
 import com.velocitypowered.proxy.plugin.VelocityPluginManager;
 import com.velocitypowered.proxy.plugin.loader.VelocityPluginContainer;
@@ -68,10 +69,7 @@ import com.velocitypowered.proxy.protocol.util.FaviconSerializer;
 import com.velocitypowered.proxy.protocol.util.GameProfileSerializer;
 import com.velocitypowered.proxy.scheduler.VelocityScheduler;
 import com.velocitypowered.proxy.server.ServerMap;
-import com.velocitypowered.proxy.util.AddressUtil;
-import com.velocitypowered.proxy.util.ClosestLocaleMatcher;
-import com.velocitypowered.proxy.util.ResourceUtils;
-import com.velocitypowered.proxy.util.VelocityChannelRegistrar;
+import com.velocitypowered.proxy.util.*;
 import com.velocitypowered.proxy.util.gradient.GradientComponentFormatter;
 import com.velocitypowered.proxy.util.ratelimit.Ratelimiter;
 import com.velocitypowered.proxy.util.ratelimit.Ratelimiters;
@@ -182,12 +180,14 @@ public class VelocityServer implements ProxyServer, ForwardingAudience {
   private final VelocityScheduler scheduler;
   private final VelocityChannelRegistrar channelRegistrar = new VelocityChannelRegistrar();
   private final ServerListPingHandler serverListPingHandler;
-  private ConfigManager configManager;
-  private MySQLManager mySQLManager;
-  private JsonConfig lobbyCfg;
-  private JsonConfig mysqlCfg;
-  private PlayerManager playerManager;
+  private final ConfigManager configManager;
+  private final MySQLManager mySQLManager;
+  private final JsonConfig lobbyCfg;
+  private final JsonConfig mysqlCfg;
+  private final JsonConfig configCfg;
+  private final PlayerManager playerManager;
   private static Component PREFIX;
+  private static Component PREFIX2;
 
   VelocityServer(final ProxyOptions options) {
     pluginManager = new VelocityPluginManager(this);
@@ -201,10 +201,15 @@ public class VelocityServer implements ProxyServer, ForwardingAudience {
     this.options = options;
     configManager = new ConfigManager(this, new File("config"));
     lobbyCfg = configManager.load("lobby");
+    configCfg = configManager.load("config");
     mysqlCfg = configManager.load("mysql");
-    PREFIX = GradientComponentFormatter.applyGradient("<#9900ff>BITCROW<#ff55ff>")
+    String rawMini = UtilsManager.MiniFontConvert("<#2f5bd6>BITCROW<#70d4fc>");
+    PREFIX = GradientComponentFormatter.applyGradient(rawMini)
             .append(Component.text(" | ")
                     .color(TextColor.color(0xA8A8A8)));
+    PREFIX2 = GradientComponentFormatter.applyGradient(
+            rawMini
+    );
     mySQLManager = new MySQLManager();
     playerManager = new PlayerManager(mySQLManager);
   }
@@ -351,6 +356,8 @@ public class VelocityServer implements ProxyServer, ForwardingAudience {
                     .build(),
             velocityParentCommand
     );
+
+    getEventManager().register(VelocityVirtualPlugin.INSTANCE, new ServerPingListener(this));
     final BrigadierCommand callbackCommand = CallbackCommand.create();
     commandManager.register(
             commandManager.metaBuilder(callbackCommand)
@@ -960,12 +967,20 @@ public class VelocityServer implements ProxyServer, ForwardingAudience {
     return mysqlCfg;
   }
 
+  public JsonConfig getConfigCfg() {
+    return configCfg;
+  }
+
   public MySQLManager getMySQLManager() {
     return mySQLManager;
   }
 
   public static Component getPREFIX() {
     return PREFIX;
+  }
+
+  public static Component getPREFIX2() {
+    return PREFIX2;
   }
 
   public PlayerManager getPlayerManager() {
