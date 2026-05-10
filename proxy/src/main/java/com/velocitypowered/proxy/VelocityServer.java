@@ -38,6 +38,7 @@ import com.velocitypowered.api.proxy.server.ServerInfo;
 import com.velocitypowered.api.util.Favicon;
 import com.velocitypowered.api.util.GameProfile;
 import com.velocitypowered.api.util.ProxyVersion;
+import com.velocitypowered.proxy.bitcrow.player.PlayerManager;
 import com.velocitypowered.proxy.command.VelocityCommandManager;
 import com.velocitypowered.proxy.command.bitcrow.FindCMD;
 import com.velocitypowered.proxy.command.bitcrow.LobbyCMD;
@@ -56,7 +57,7 @@ import com.velocitypowered.proxy.connection.util.ServerListPingHandler;
 import com.velocitypowered.proxy.console.VelocityConsole;
 import com.velocitypowered.proxy.crypto.EncryptionUtils;
 import com.velocitypowered.proxy.event.VelocityEventManager;
-import com.velocitypowered.proxy.mysql.MySQLManager;
+import com.velocitypowered.proxy.bitcrow.mysql.MySQLManager;
 import com.velocitypowered.proxy.network.ConnectionManager;
 import com.velocitypowered.proxy.plugin.VelocityPluginManager;
 import com.velocitypowered.proxy.plugin.loader.VelocityPluginContainer;
@@ -185,6 +186,7 @@ public class VelocityServer implements ProxyServer, ForwardingAudience {
   private MySQLManager mySQLManager;
   private JsonConfig lobbyCfg;
   private JsonConfig mysqlCfg;
+  private PlayerManager playerManager;
   private static Component PREFIX;
 
   VelocityServer(final ProxyOptions options) {
@@ -204,6 +206,7 @@ public class VelocityServer implements ProxyServer, ForwardingAudience {
             .append(Component.text(" | ")
                     .color(TextColor.color(0xA8A8A8)));
     mySQLManager = new MySQLManager();
+    playerManager = new PlayerManager(mySQLManager);
   }
 
   public KeyPair getServerKeyPair() {
@@ -222,9 +225,9 @@ public class VelocityServer implements ProxyServer, ForwardingAudience {
     String implVersion;
     String implVendor;
     if (pkg != null) {
-      implName = "VeloCrow"; //MoreObjects.firstNonNull(pkg.getImplementationTitle(), "Velocity");
-      implVersion = "1.0.0"; //MoreObjects.firstNonNull(pkg.getImplementationVersion(), "<unknown>");
-      implVendor = "BITCROW's Proxy Software"; //MoreObjects.firstNonNull(pkg.getImplementationVendor(), "Velocity Contributors");
+      implName = "VeloCrow";
+      implVersion = "1.0.0";
+      implVendor = "BITCROW's Proxy Software";
     } else {
       implName = "VeloCrow";
       implVersion = "1.0.0";
@@ -255,78 +258,17 @@ public class VelocityServer implements ProxyServer, ForwardingAudience {
   }
 
   @EnsuresNonNull({"serverKeyPair", "servers", "pluginManager", "eventManager", "scheduler",
-      "console", "cm", "configuration"})
+      "console", "cm", "configuration", "mySQLManager", "lobbyCfg", "mysqlCfg"})
   void start() {
     logger.info("Booting up {} {}...", getVersion().getName(), getVersion().getVersion());
     console.setupStreams();
-    //logger.info(lobbyCfg.getString("lobby.server", "default") + " is the lobbysystem server");
     pluginManager.registerPlugin(this.createVirtualPlugin());
 
-    // Yes, you're reading that correctly. We're generating a 1024-bit RSA keypair. Sounds
-    // dangerous, right? We're well within the realm of factoring such a key...
-    //
-    // You can blame Mojang. For the record, we also don't consider the Minecraft protocol
-    // encryption scheme to be secure, and it has reached the point where any serious cryptographic
-    // protocol needs a refresh. There are multiple obvious weaknesses, and this is far from the
-    // most serious.
-    //
-    // If you are using Minecraft in a security-sensitive application, *I don't know what to say.*
     serverKeyPair = EncryptionUtils.createRsaKeyPair(1024);
 
     cm.logChannelInformation();
 
-    // Initialize commands first
-    final BrigadierCommand velocityParentCommand = VelocityCommand.create(this);
-    commandManager.register(
-        commandManager.metaBuilder(velocityParentCommand)
-            .plugin(VelocityVirtualPlugin.INSTANCE)
-            .build(),
-        velocityParentCommand
-    );
-    final BrigadierCommand callbackCommand = CallbackCommand.create();
-    commandManager.register(
-        commandManager.metaBuilder(callbackCommand)
-            .plugin(VelocityVirtualPlugin.INSTANCE)
-            .build(),
-        callbackCommand
-    );
-    final BrigadierCommand serverCommand = ServerCommand.create(this);
-    commandManager.register(
-        commandManager.metaBuilder(serverCommand)
-            .plugin(VelocityVirtualPlugin.INSTANCE)
-            .build(),
-        serverCommand
-    );
-    final BrigadierCommand shutdownCommand = ShutdownCommand.command(this);
-    commandManager.register(
-        commandManager.metaBuilder(shutdownCommand)
-            .plugin(VelocityVirtualPlugin.INSTANCE)
-            .aliases("end", "stop")
-            .build(),
-        shutdownCommand
-    );
-
-    final BrigadierCommand lobbyCommand = LobbyCMD.command(this);
-    commandManager.register(
-            commandManager.metaBuilder(lobbyCommand)
-                    .plugin(VelocityVirtualPlugin.INSTANCE)
-                    .aliases("lobby")
-                    .build(),
-            lobbyCommand
-    );
-
-    final BrigadierCommand findCommand = FindCMD.command(this);
-    commandManager.register(
-            commandManager.metaBuilder(findCommand)
-                    .plugin(VelocityVirtualPlugin.INSTANCE)
-                    .aliases("find")
-                    .build(),
-            findCommand
-    );
-
-
-    new GlistCommand(this).register();
-    new SendCommand(this).register();
+    loadBuildInCommands();
 
     this.doStartupConfigLoad();
 
@@ -346,19 +288,8 @@ public class VelocityServer implements ProxyServer, ForwardingAudience {
     commandRateLimiter = Ratelimiters.createWithMilliseconds(configuration.getCommandRatelimit());
     tabCompleteRateLimiter = Ratelimiters.createWithMilliseconds(configuration.getTabCompleteRatelimit());
 
-    boolean ok = mySQLManager.connect(
-            getMysqlCfg().getString("mysql.host", "localhost"),
-            getMysqlCfg().getInt("mysql.port", 3306),
-            getMysqlCfg().getString("mysql.database", "testdb"),
-            getMysqlCfg().getString("mysql.username", "root"),
-            getMysqlCfg().getString("mysql.password", "password")
-    );
-
-    if (ok) {
-      logger.info("[Main] MySQL enabled, continuing...");
-    } else {
-      logger.warn("[Main] MySQL disabled, skipping...");
-    }
+    connectMySQL();
+    playerManager.createTable();
 
     loadPlugins();
 
@@ -395,6 +326,77 @@ public class VelocityServer implements ProxyServer, ForwardingAudience {
       logger.warn("debug environment, metrics is disabled!");
     }
   }
+
+  private void connectMySQL() {
+    boolean ok = mySQLManager.connect(
+            getMysqlCfg().getString("mysql.host", "localhost"),
+            getMysqlCfg().getInt("mysql.port", 3306),
+            getMysqlCfg().getString("mysql.database", "testdb"),
+            getMysqlCfg().getString("mysql.username", "root"),
+            getMysqlCfg().getString("mysql.password", "password")
+    );
+
+    if (ok) {
+      logger.info("[Main] MySQL enabled, continuing...");
+    } else {
+      logger.warn("[Main] MySQL disabled, skipping...");
+    }
+  }
+
+  private void loadBuildInCommands() {
+    final BrigadierCommand velocityParentCommand = VelocityCommand.create(this);
+    commandManager.register(
+            commandManager.metaBuilder(velocityParentCommand)
+                    .plugin(VelocityVirtualPlugin.INSTANCE)
+                    .build(),
+            velocityParentCommand
+    );
+    final BrigadierCommand callbackCommand = CallbackCommand.create();
+    commandManager.register(
+            commandManager.metaBuilder(callbackCommand)
+                    .plugin(VelocityVirtualPlugin.INSTANCE)
+                    .build(),
+            callbackCommand
+    );
+    final BrigadierCommand serverCommand = ServerCommand.create(this);
+    commandManager.register(
+            commandManager.metaBuilder(serverCommand)
+                    .plugin(VelocityVirtualPlugin.INSTANCE)
+                    .build(),
+            serverCommand
+    );
+    final BrigadierCommand shutdownCommand = ShutdownCommand.command(this);
+    commandManager.register(
+            commandManager.metaBuilder(shutdownCommand)
+                    .plugin(VelocityVirtualPlugin.INSTANCE)
+                    .aliases("end", "stop")
+                    .build(),
+            shutdownCommand
+    );
+
+    final BrigadierCommand lobbyCommand = LobbyCMD.command(this);
+    commandManager.register(
+            commandManager.metaBuilder(lobbyCommand)
+                    .plugin(VelocityVirtualPlugin.INSTANCE)
+                    .aliases("lobby")
+                    .build(),
+            lobbyCommand
+    );
+
+    final BrigadierCommand findCommand = FindCMD.command(this);
+    commandManager.register(
+            commandManager.metaBuilder(findCommand)
+                    .plugin(VelocityVirtualPlugin.INSTANCE)
+                    .aliases("find")
+                    .build(),
+            findCommand
+    );
+
+
+    new GlistCommand(this).register();
+    new SendCommand(this).register();
+  }
+
 
   private void registerTranslations() {
     final MiniMessageTranslationStore translationRegistry =
@@ -635,6 +637,7 @@ public class VelocityServer implements ProxyServer, ForwardingAudience {
 
       // Shutdown the connection manager, this should be
       // done first to refuse new connections
+      onShutdown();
       cm.shutdown();
 
       try {
@@ -712,6 +715,16 @@ public class VelocityServer implements ProxyServer, ForwardingAudience {
    */
   public void shutdown(boolean explicitExit) {
     shutdown(explicitExit, Component.translatable("velocity.kick.shutdown"));
+  }
+
+  public void onShutdown() {
+
+    playerManager.clearAllPlayersFromDB();
+
+    for (Player p : getAllPlayers()) {
+      playerManager.removePlayer(p.getUniqueId());
+      p.disconnect(Component.text("Proxy shutting down"));
+    }
   }
 
   @Override
@@ -953,5 +966,9 @@ public class VelocityServer implements ProxyServer, ForwardingAudience {
 
   public static Component getPREFIX() {
     return PREFIX;
+  }
+
+  public PlayerManager getPlayerManager() {
+    return playerManager;
   }
 }
