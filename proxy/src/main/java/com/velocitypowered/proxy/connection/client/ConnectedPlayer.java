@@ -955,27 +955,36 @@ public class ConnectedPlayer implements MinecraftConnectionAssociation, Player, 
     if (connectionInFlight != null) {
       connectionInFlight.disconnect();
     }
+
     if (connectedServer != null) {
       connectedServer.disconnect();
     }
 
     Optional<Player> connectedPlayer = server.getPlayer(this.getUniqueId());
+
     server.unregisterConnection(this);
 
+    // 👉 WICHTIG: Proxy / DB State sauber entfernen
+    server.getPlayerManager().removePlayer(this.getUniqueId());
+
     DisconnectEvent.LoginStatus status;
+
     if (connectedPlayer.isPresent()) {
       if (connectedPlayer.get().getCurrentServer().isEmpty()) {
         status = LoginStatus.PRE_SERVER_JOIN;
       } else {
-        status = connectedPlayer.get() == this ? LoginStatus.SUCCESSFUL_LOGIN
-            : LoginStatus.CONFLICTING_LOGIN;
+        status = connectedPlayer.get() == this
+                ? LoginStatus.SUCCESSFUL_LOGIN
+                : LoginStatus.CONFLICTING_LOGIN;
       }
     } else {
-      status = connection.isKnownDisconnect() ? LoginStatus.CANCELLED_BY_PROXY :
-          LoginStatus.CANCELLED_BY_USER;
+      status = connection.isKnownDisconnect()
+              ? LoginStatus.CANCELLED_BY_PROXY
+              : LoginStatus.CANCELLED_BY_USER;
     }
 
     DisconnectEvent event = new DisconnectEvent(this, status);
+
     server.getEventManager().fire(event).whenComplete((val, ex) -> {
       if (ex == null) {
         this.teardownFuture.complete(null);

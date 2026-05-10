@@ -118,6 +118,11 @@ public class TransitionSessionHandler implements MinecraftSessionHandler {
             return;
           }
 
+          server.getPlayerManager().updateServer(
+                  player.getUniqueId(),
+                  serverConn.getServerInfo().getName()
+          );
+
           // Change the client to use the ClientPlaySessionHandler if required.
           ClientPlaySessionHandler playHandler;
           if (player.getConnection()
