@@ -52,9 +52,7 @@ public class FindCMD {
 
                                     Player player = target.get();
 
-                                    String serverName = player.getCurrentServer()
-                                            .map(s -> s.getServerInfo().getName())
-                                            .orElse("unknown"); //TODO: safed server in MySQL read
+                                    String serverName = server.getPlayerManager().getPlayer(player.getUniqueId()).getCurrentServer();
 
                                     source.sendMessage(
                                             server.getPREFIX().append(
