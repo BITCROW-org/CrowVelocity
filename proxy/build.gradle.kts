@@ -138,6 +138,9 @@ dependencies {
     implementation(project(":velocity-native"))
     implementation("com.mysql:mysql-connector-j:8.4.0")
     implementation("com.zaxxer:HikariCP:6.3.0")
+    compileOnly("net.labymod.serverapi:api:1.0.10")
+    compileOnly("net.labymod.serverapi:core:1.0.10")
+    implementation("net.labymod.serverapi:server-velocity:1.0.10")
 
     implementation(libs.bundles.log4j)
     implementation(libs.kyori.ansi)

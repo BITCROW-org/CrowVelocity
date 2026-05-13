@@ -62,6 +62,7 @@ import com.velocitypowered.proxy.console.VelocityConsole;
 import com.velocitypowered.proxy.crypto.EncryptionUtils;
 import com.velocitypowered.proxy.event.VelocityEventManager;
 import com.velocitypowered.proxy.bitcrow.mysql.MySQLManager;
+import com.velocitypowered.proxy.event.bitcrow.LabyListener;
 import com.velocitypowered.proxy.event.bitcrow.ServerPingListener;
 import com.velocitypowered.proxy.network.ConnectionManager;
 import com.velocitypowered.proxy.plugin.VelocityPluginManager;
@@ -118,6 +119,7 @@ import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.TextColor;
 import net.kyori.adventure.text.minimessage.translation.MiniMessageTranslationStore;
 import net.kyori.adventure.translation.GlobalTranslator;
+import net.labymod.serverapi.server.velocity.LabyModProtocolService;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.bstats.MetricsBase;
@@ -125,6 +127,7 @@ import org.checkerframework.checker.nullness.qual.EnsuresNonNull;
 import org.checkerframework.checker.nullness.qual.MonotonicNonNull;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
+import org.slf4j.LoggerFactory;
 
 /**
  * Implementation of {@link ProxyServer}.
@@ -134,6 +137,7 @@ public class VelocityServer implements ProxyServer, ForwardingAudience {
   public static final String VELOCITY_URL = "https://papermc.io/software/velocity";
 
   private static final Logger logger = LogManager.getLogger(VelocityServer.class);
+  private static final org.slf4j.Logger labyLogger = LoggerFactory.getLogger(VelocityServer.class);
   public static final Gson GENERAL_GSON = new GsonBuilder()
       .registerTypeHierarchyAdapter(Favicon.class, FaviconSerializer.INSTANCE)
       .registerTypeHierarchyAdapter(GameProfile.class, GameProfileSerializer.INSTANCE)
@@ -357,6 +361,7 @@ public class VelocityServer implements ProxyServer, ForwardingAudience {
     );
 
     getEventManager().register(VelocityVirtualPlugin.INSTANCE, new ServerPingListener(this));
+    getEventManager().register(VelocityVirtualPlugin.INSTANCE, new LabyListener(this));
     final BrigadierCommand callbackCommand = CallbackCommand.create();
     commandManager.register(
             commandManager.metaBuilder(callbackCommand)
@@ -1002,5 +1007,9 @@ public class VelocityServer implements ProxyServer, ForwardingAudience {
 
   public PlaytimeManager getPlaytimeManager() {
     return playtimeManager;
+  }
+
+  public static org.slf4j.Logger getLabyLogger() {
+    return labyLogger;
   }
 }
