@@ -35,6 +35,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
+import com.velocitypowered.proxy.util.UtilsManager;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.TextComponent;
 import net.kyori.adventure.text.TranslatableComponent;
@@ -131,7 +132,7 @@ public final class ServerCommand {
               + "\u2550\u2550\u2563", SERVER_BLUE_DARK))
           .append(Component.newline())
           .append(Component.text(" Current: ", SERVER_MUTED))
-          .append(Component.text(currentServer, SERVER_TEXT))
+          .append(Component.text(UtilsManager.convertText(currentServer), SERVER_TEXT))
           .append(Component.newline());
 
       for (final CompletableFuture<ServerListEntry> ping : pings) {
@@ -156,7 +157,7 @@ public final class ServerCommand {
     final boolean currentServer = serverInfo.getName().equals(currentPlayerServer);
     final TextComponent.Builder serverTextComponent = Component.text()
             .append(Component.text(" > ", SERVER_BLUE))
-            .append(Component.text(serverInfo.getName(), currentServer ? SERVER_BLUE : SERVER_TEXT))
+            .append(Component.text(UtilsManager.convertText(serverInfo.getName()), currentServer ? SERVER_BLUE : SERVER_TEXT))
             .append(Component.space())
             .append(Component.text(online ? "\u2713" : "\u2716",
                 online ? SERVER_ONLINE : SERVER_OFFLINE))
