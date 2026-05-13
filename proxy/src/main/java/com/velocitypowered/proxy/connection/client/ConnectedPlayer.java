@@ -964,8 +964,8 @@ public class ConnectedPlayer implements MinecraftConnectionAssociation, Player, 
 
     server.unregisterConnection(this);
 
-    // 👉 WICHTIG: Proxy / DB State sauber entfernen
     server.getPlayerManager().removePlayer(this.getUniqueId());
+    server.getPlaytimeManager().unloadPlayer(this.getUniqueId());
 
     DisconnectEvent.LoginStatus status;
 

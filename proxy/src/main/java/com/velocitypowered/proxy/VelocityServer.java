@@ -39,6 +39,8 @@ import com.velocitypowered.api.util.Favicon;
 import com.velocitypowered.api.util.GameProfile;
 import com.velocitypowered.api.util.ProxyVersion;
 import com.velocitypowered.proxy.bitcrow.player.PlayerManager;
+import com.velocitypowered.proxy.bitcrow.player.PlaytimeManager;
+import com.velocitypowered.proxy.bitcrow.scheduler.PlaytimeScheduler;
 import com.velocitypowered.proxy.bitcrow.scheduler.TablistScheduler;
 import com.velocitypowered.proxy.command.VelocityCommandManager;
 import com.velocitypowered.proxy.command.bitcrow.FindCMD;
@@ -189,6 +191,7 @@ public class VelocityServer implements ProxyServer, ForwardingAudience {
   private final JsonConfig mysqlCfg;
   private final JsonConfig configCfg;
   private final PlayerManager playerManager;
+  private final PlaytimeManager playtimeManager;
   private static Component PREFIX;
   private static Component PREFIX2;
 
@@ -215,6 +218,7 @@ public class VelocityServer implements ProxyServer, ForwardingAudience {
     );
     mySQLManager = new MySQLManager();
     playerManager = new PlayerManager(mySQLManager);
+    playtimeManager = new PlaytimeManager(mySQLManager);
   }
 
   public KeyPair getServerKeyPair() {
@@ -228,20 +232,12 @@ public class VelocityServer implements ProxyServer, ForwardingAudience {
 
   @Override
   public ProxyVersion getVersion() {
-    Package pkg = VelocityServer.class.getPackage();
     String implName;
     String implVersion;
     String implVendor;
-    if (pkg != null) {
-      implName = "VeloCrow";
-      implVersion = "1.0.0";
-      implVendor = "BITCROW's Proxy Software";
-    } else {
-      implName = "VeloCrow";
-      implVersion = "1.0.0";
-      implVendor = "BITCROW's Proxy Software";
-    }
-
+    implName = "VeloCrow";
+    implVersion = "1.0.0";
+    implVendor = "BITCROW's Proxy Software";
     return new ProxyVersion(implName, implVendor, implVersion);
   }
 
@@ -298,6 +294,8 @@ public class VelocityServer implements ProxyServer, ForwardingAudience {
 
     connectMySQL();
     playerManager.createTable();
+    playtimeManager.createTable();
+    playtimeManager.loadAllPlaytimes();
 
     loadPlugins();
 
@@ -931,11 +929,11 @@ public class VelocityServer implements ProxyServer, ForwardingAudience {
 
   public void registerScheduler() {
     this.getScheduler()
-            .buildTask(VelocityVirtualPlugin.INSTANCE, () -> {
-              playerManager.reloadPlayersFromDatabase();
-            })
+            .buildTask(VelocityVirtualPlugin.INSTANCE, playerManager::reloadPlayersFromDatabase)
             .repeat(Duration.ofSeconds(30))
             .schedule();
+
+    PlaytimeScheduler.startUpdater(this, playtimeManager);
 
     TablistScheduler.startUpdater(this);
   }
@@ -1000,5 +998,9 @@ public class VelocityServer implements ProxyServer, ForwardingAudience {
 
   public PlayerManager getPlayerManager() {
     return playerManager;
+  }
+
+  public PlaytimeManager getPlaytimeManager() {
+    return playtimeManager;
   }
 }

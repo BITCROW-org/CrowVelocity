@@ -34,17 +34,21 @@ import com.velocitypowered.api.proxy.server.RegisteredServer;
 import com.velocitypowered.api.util.GameProfile;
 import com.velocitypowered.api.util.UuidUtils;
 import com.velocitypowered.proxy.VelocityServer;
+import com.velocitypowered.proxy.bitcrow.scheduler.TablistScheduler;
 import com.velocitypowered.proxy.config.PlayerInfoForwarding;
 import com.velocitypowered.proxy.config.VelocityConfiguration;
 import com.velocitypowered.proxy.connection.MinecraftConnection;
 import com.velocitypowered.proxy.connection.MinecraftSessionHandler;
 import com.velocitypowered.proxy.crypto.IdentifiedKeyImpl;
+import com.velocitypowered.proxy.plugin.virtual.VelocityVirtualPlugin;
 import com.velocitypowered.proxy.protocol.StateRegistry;
 import com.velocitypowered.proxy.protocol.packet.LoginAcknowledgedPacket;
 import com.velocitypowered.proxy.protocol.packet.ServerLoginSuccessPacket;
 import com.velocitypowered.proxy.protocol.packet.ServerboundCookieResponsePacket;
 import com.velocitypowered.proxy.protocol.packet.SetCompressionPacket;
 import io.netty.buffer.ByteBuf;
+
+import java.time.Duration;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
@@ -197,6 +201,7 @@ public class AuthSessionHandler implements MinecraftSessionHandler {
                       connectedPlayer.getUsername(),
                       "unknown"
               );
+              server.getPlaytimeManager().loadPlayer(connectedPlayer.getUniqueId());
               return connectToInitialServer(connectedPlayer);
             })
             .exceptionally(ex -> {
@@ -269,10 +274,31 @@ public class AuthSessionHandler implements MinecraftSessionHandler {
                         player.getUsername(),
                         "unknown"
                 );
+                server.getPlaytimeManager().loadPlayer(player.getUniqueId());
+
 
                 server.getEventManager()
                         .fire(new PostLoginEvent(player))
-                        .thenCompose(v -> connectToInitialServer(player))
+                        .thenCompose(v -> {
+                          server.getPlayerManager().addPlayer(
+                                  player.getUniqueId(),
+                                  player.getUsername(),
+                                  "unknown"
+                          );
+
+                          server.getPlaytimeManager().loadPlayer(player.getUniqueId());
+
+                          return connectToInitialServer(player);
+                        })
+                        .thenAccept(v -> {
+                          mcConnection.eventLoop().execute(() -> {
+                            TablistScheduler.updatePlayer(server, player);
+
+                            server.getScheduler().buildTask(VelocityVirtualPlugin.INSTANCE, () -> {
+                              TablistScheduler.updatePlayer(server, player);
+                            }).delay(Duration.ofMillis(100)).schedule();
+                          });
+                        })
                         .exceptionally(ex -> {
                           logger.error("Exception while connecting {} to initial server", player, ex);
                           return null;
