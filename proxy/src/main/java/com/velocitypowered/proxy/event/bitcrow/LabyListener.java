@@ -5,11 +5,8 @@ import com.velocitypowered.api.event.proxy.ProxyInitializeEvent;
 import com.velocitypowered.proxy.VelocityServer;
 import com.velocitypowered.proxy.plugin.virtual.VelocityVirtualPlugin;
 import net.labymod.serverapi.core.LabyModProtocol;
-import net.labymod.serverapi.core.model.display.TabListFlag;
-import net.labymod.serverapi.core.model.feature.DiscordRPC;
 import net.labymod.serverapi.core.model.feature.Feature;
 import net.labymod.serverapi.core.packet.clientbound.game.feature.UpdateFeaturePacket;
-import net.labymod.serverapi.server.velocity.LabyModPlayer;
 import net.labymod.serverapi.server.velocity.LabyModProtocolService;
 import net.labymod.serverapi.server.velocity.event.LabyModPlayerJoinEvent;
 
