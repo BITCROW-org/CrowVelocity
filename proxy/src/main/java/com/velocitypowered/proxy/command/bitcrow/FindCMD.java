@@ -27,9 +27,11 @@ public class FindCMD {
                                 .suggests((context, builder) -> {
                                     String input = builder.getRemaining().toLowerCase();
 
-                                    server.getAllPlayers().forEach(p -> {
-                                        if (p.getUsername().toLowerCase().startsWith(input)) {
-                                            builder.suggest(p.getUsername());
+                                    server.getPlayerManager().getPlayersAlphabetically().forEach(data -> {
+                                        String name = data.getUsername();
+
+                                        if (name != null && name.toLowerCase().startsWith(input)) {
+                                            builder.suggest(name);
                                         }
                                     });
 
@@ -52,9 +54,7 @@ public class FindCMD {
 
                                     Player player = target.get();
 
-                                    String serverName = player.getCurrentServer()
-                                            .map(s -> s.getServerInfo().getName())
-                                            .orElse("unknown"); //TODO: safed server in MySQL read
+                                    String serverName = server.getPlayerManager().getPlayer(player.getUniqueId()).getCurrentServer();
 
                                     source.sendMessage(
                                             server.getPREFIX().append(

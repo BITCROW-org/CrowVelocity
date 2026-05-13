@@ -27,6 +27,7 @@ tasks {
     }
 
     shadowJar {
+        mergeServiceFiles()
         filesMatching("META-INF/org/apache/logging/log4j/core/config/plugins/**") {
             duplicatesStrategy = DuplicatesStrategy.INCLUDE
         }
@@ -135,6 +136,8 @@ fill {
 dependencies {
     implementation(project(":velocity-api"))
     implementation(project(":velocity-native"))
+    implementation("com.mysql:mysql-connector-j:8.4.0")
+    implementation("com.zaxxer:HikariCP:6.3.0")
 
     implementation(libs.bundles.log4j)
     implementation(libs.kyori.ansi)
