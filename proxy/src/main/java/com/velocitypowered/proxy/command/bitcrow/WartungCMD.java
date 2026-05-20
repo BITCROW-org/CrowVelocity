@@ -18,8 +18,8 @@ public class WartungCMD {
 
     public static BrigadierCommand command(final VelocityServer server) {
         return new BrigadierCommand(
-                LiteralArgumentBuilder.<CommandSource>literal("wartung")
-                        .requires(source -> source.hasPermission("bitcrow.wartung"))
+                LiteralArgumentBuilder.<CommandSource>literal("vwartung")
+                        .requires(source -> source.hasPermission("bitcrow.netzwerkwartung"))
                         .executes(context -> {
                             CommandSource sender = context.getSource();
 
@@ -45,6 +45,7 @@ public class WartungCMD {
 
                                         case "on" -> {
                                             server.getConfigCfg().set("wartung", true);
+                                            server.getConfigCfg().save();
 
                                             sender.sendMessage(
                                                     VelocityServer.getPREFIX().append(
@@ -69,6 +70,7 @@ public class WartungCMD {
 
                                         case "off" -> {
                                             server.getConfigCfg().set("wartung", false);
+                                            server.getConfigCfg().save();
 
                                             sender.sendMessage(
                                                     VelocityServer.getPREFIX().append(

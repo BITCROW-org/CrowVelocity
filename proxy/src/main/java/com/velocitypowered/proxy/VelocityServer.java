@@ -407,7 +407,7 @@ public class VelocityServer implements ProxyServer, ForwardingAudience {
     commandManager.register(
             commandManager.metaBuilder(vwartungCommand)
                     .plugin(VelocityVirtualPlugin.INSTANCE)
-                    .aliases("vwartung")
+                    .aliases("nwartung")
                     .build(),
             vwartungCommand
     );
