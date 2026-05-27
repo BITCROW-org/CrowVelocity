@@ -57,7 +57,7 @@ public class SendCommand {
     final LiteralArgumentBuilder<CommandSource> rootNode = BrigadierCommand
         .literalArgumentBuilder("send")
         .requires(source ->
-            source.getPermissionValue("velocity.command.send") == Tristate.TRUE)
+            source.getPermissionValue("velocrow.command.send") == Tristate.TRUE)
         .executes(this::usage);
     final RequiredArgumentBuilder<CommandSource, String> playerNode = BrigadierCommand
         .requiredArgumentBuilder(PLAYER_ARG, StringArgumentType.word())

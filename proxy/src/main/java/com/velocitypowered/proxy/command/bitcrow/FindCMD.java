@@ -21,7 +21,7 @@ public class FindCMD {
         return new BrigadierCommand(
                 LiteralArgumentBuilder.<CommandSource>literal("find")
                         .requires(source ->
-                                source.getPermissionValue("velocity.command.find") == Tristate.TRUE)
+                                source.getPermissionValue("bitcrow.command.find") == Tristate.TRUE)
                         .then(com.mojang.brigadier.builder.RequiredArgumentBuilder
                                 .<CommandSource, String>argument("player", StringArgumentType.word())
                                 .suggests((context, builder) -> {

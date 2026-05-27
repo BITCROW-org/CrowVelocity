@@ -30,6 +30,7 @@ import com.velocitypowered.api.command.CommandSource;
 import com.velocitypowered.api.permission.Tristate;
 import com.velocitypowered.api.plugin.PluginContainer;
 import com.velocitypowered.api.plugin.PluginDescription;
+import com.velocitypowered.api.proxy.Player;
 import com.velocitypowered.api.proxy.ProxyServer;
 import com.velocitypowered.api.proxy.server.RegisteredServer;
 import com.velocitypowered.api.util.ProxyVersion;
@@ -103,6 +104,7 @@ public final class VelocityCommand {
       commands.stream()
         .reduce(
           BrigadierCommand.literalArgumentBuilder("velocity")
+                  .requires(src -> src.getPermissionValue("velocrow.command.velocity") != Tristate.FALSE)
             .executes(ctx -> {
               final CommandSource source = ctx.getSource();
               final String availableCommands = commands.stream()
