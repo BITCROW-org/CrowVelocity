@@ -42,6 +42,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.SecureRandom;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -217,9 +218,8 @@ public class VelocityConfiguration implements ProxyConfig {
 
       for (String server : sallyLabsPatchConfig.getLimboRecoveryServers()) {
         if (!servers.getServers().containsKey(server)) {
-          logger.error("SallyLabs limbo recovery server '{}' is not registered in your "
-              + "configuration!", server);
-          valid = false;
+          logger.warn("SallyLabs limbo recovery server '{}' is not registered in your "
+              + "configuration and will be skipped until it exists.", server);
         }
       }
     }
@@ -582,6 +582,10 @@ public class VelocityConfiguration implements ProxyConfig {
       final byte[] forwardingSecret = forwardingSecretString.getBytes(StandardCharsets.UTF_8);
       final String motd = config.getOrElse("motd", "<#09add3>A Velocity Server");
 
+      final SallyLabsPatchConfig sallyLabsPatchConfig = SallyLabsPatchConfig.read(
+          path.resolveSibling("sallylabs.toml"));
+      ensureSallyLabsServerEntries(config, sallyLabsPatchConfig);
+
       // Read the rest of the config
       final CommentedConfig serversConfig = config.get("servers");
       final CommentedConfig forcedHostsConfig = config.get("forced-hosts");
@@ -606,8 +610,6 @@ public class VelocityConfiguration implements ProxyConfig {
       final boolean enablePlayerAddressLogging = config.getOrElse(
               "enable-player-address-logging", true);
       final PacketLimiterConfig packetLimiterConfig = PacketLimiterConfig.fromConfig(config.get("packet-limiter"));
-      final SallyLabsPatchConfig sallyLabsPatchConfig = SallyLabsPatchConfig.read(
-          path.resolveSibling("sallylabs.toml"));
 
       // Throw an exception if the forwarding-secret file is empty and the proxy is using a
       // forwarding mode that requires it.
@@ -640,6 +642,78 @@ public class VelocityConfiguration implements ProxyConfig {
               sallyLabsPatchConfig
       );
     }
+  }
+
+  private static void ensureSallyLabsServerEntries(CommentedFileConfig config,
+                                                   SallyLabsPatchConfig sallyLabsPatchConfig) {
+    if (!sallyLabsPatchConfig.isLimboEnabled() || sallyLabsPatchConfig.isInternalLimbo()) {
+      return;
+    }
+
+    CommentedConfig servers = config.get("servers");
+    if (servers == null) {
+      servers = CommentedConfig.inMemory();
+      config.set("servers", servers);
+    }
+    normalizeDuplicateServerNames(servers);
+
+    String limboServer = sallyLabsPatchConfig.getLimboServer();
+    if (!containsServerIgnoreCase(servers, limboServer)) {
+      String address = defaultSallyLabsServerAddress(limboServer);
+      servers.set(limboServer, address);
+      logger.warn("SallyLabs added missing limbo server '{}' to velocity.toml at {}. "
+          + "Change the address if your limbo runs elsewhere.", limboServer, address);
+    }
+
+    for (String recoveryServer : sallyLabsPatchConfig.getLimboRecoveryServers()) {
+      if (!containsServerIgnoreCase(servers, recoveryServer)
+          && "lobby".equalsIgnoreCase(recoveryServer)) {
+        String address = defaultSallyLabsServerAddress(recoveryServer);
+        servers.set(recoveryServer, address);
+        logger.warn("SallyLabs added missing recovery server '{}' to velocity.toml at {}. "
+            + "Change the address if your lobby runs elsewhere.", recoveryServer, address);
+      }
+    }
+  }
+
+  private static boolean containsServerIgnoreCase(CommentedConfig servers, String serverName) {
+    for (UnmodifiableConfig.Entry entry : servers.entrySet()) {
+      if (entry.getValue() instanceof String
+          && entry.getKey().replace("\"", "").equalsIgnoreCase(serverName)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  private static void normalizeDuplicateServerNames(CommentedConfig servers) {
+    Map<String, String> canonicalNames = new HashMap<>();
+    List<String> duplicateNames = new ArrayList<>();
+    for (UnmodifiableConfig.Entry entry : servers.entrySet()) {
+      if (!(entry.getValue() instanceof String)) {
+        continue;
+      }
+
+      String cleanName = entry.getKey().replace("\"", "");
+      String lowerName = cleanName.toLowerCase(Locale.US);
+      String existingName = canonicalNames.putIfAbsent(lowerName, entry.getKey());
+      if (existingName != null && !existingName.equals(entry.getKey())) {
+        duplicateNames.add(entry.getKey());
+      }
+    }
+
+    for (String duplicateName : duplicateNames) {
+      servers.remove(duplicateName);
+      logger.warn("SallyLabs removed duplicate server entry '{}' from velocity.toml because "
+          + "Velocity server names are case-insensitive.", duplicateName);
+    }
+  }
+
+  private static String defaultSallyLabsServerAddress(String serverName) {
+    if ("limbo".equalsIgnoreCase(serverName)) {
+      return "127.0.0.1:30065";
+    }
+    return "127.0.0.1:30066";
   }
 
   /**
