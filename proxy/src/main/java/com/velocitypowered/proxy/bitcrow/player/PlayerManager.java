@@ -21,6 +21,10 @@ public class PlayerManager {
     }
 
     public void createTable() {
+        if (!mySQLManager.isConnected()) {
+            return;
+        }
+
         CompletableFuture.runAsync(() -> {
             try (Connection conn = mySQLManager.getConnection();
                  PreparedStatement statement = conn.prepareStatement("""
@@ -81,6 +85,10 @@ public class PlayerManager {
     }
 
     private void savePlayerAsync(PlayerData data) {
+        if (!mySQLManager.isConnected()) {
+            return;
+        }
+
         CompletableFuture.runAsync(() -> {
             try (Connection conn = mySQLManager.getConnection();
                  PreparedStatement statement = conn.prepareStatement("""
@@ -104,6 +112,10 @@ public class PlayerManager {
     }
 
     private void updateServerAsync(UUID uuid, String server) {
+        if (!mySQLManager.isConnected()) {
+            return;
+        }
+
         CompletableFuture.runAsync(() -> {
             try (Connection conn = mySQLManager.getConnection();
                  PreparedStatement statement = conn.prepareStatement("""
@@ -124,6 +136,10 @@ public class PlayerManager {
     }
 
     private void deletePlayerAsync(UUID uuid) {
+        if (!mySQLManager.isConnected()) {
+            return;
+        }
+
         CompletableFuture.runAsync(() -> {
             try (Connection conn = mySQLManager.getConnection();
                  PreparedStatement statement = conn.prepareStatement("""
@@ -140,6 +156,10 @@ public class PlayerManager {
     }
 
     public void clearAllPlayersFromDB() {
+        if (!mySQLManager.isConnected()) {
+            return;
+        }
+
         CompletableFuture.runAsync(() -> {
             try (Connection conn = mySQLManager.getConnection();
                  PreparedStatement statement = conn.prepareStatement("""
@@ -154,6 +174,9 @@ public class PlayerManager {
         }, executor);
     }
     public void reloadPlayersFromDatabase() {
+        if (!mySQLManager.isConnected()) {
+            return;
+        }
 
         CompletableFuture.runAsync(() -> {
 

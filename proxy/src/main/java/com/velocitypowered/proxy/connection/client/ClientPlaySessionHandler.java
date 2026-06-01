@@ -299,6 +299,13 @@ public class ClientPlaySessionHandler implements MinecraftSessionHandler {
 
   @Override
   public boolean handle(PluginMessagePacket packet) {
+    if (!server.getSallyLabsPatchManager().pluginMessageSecurity().isAllowed(packet,
+        server.getConfiguration().getSallyLabsPatchConfig())) {
+      logger.warn("{} sent a blocked plugin message on {}", player, packet.getChannel());
+      player.disconnect(Component.text("Plugin message rejected."));
+      return true;
+    }
+
     // Handling edge case when packet with FML client handshake (state COMPLETE)
     // arrives after JoinGame packet from destination server
     VelocityServerConnection serverConn =

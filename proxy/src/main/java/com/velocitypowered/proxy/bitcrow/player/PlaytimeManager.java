@@ -22,6 +22,10 @@ public class PlaytimeManager {
     }
 
     public void createTable() {
+        if (!mySQLManager.isConnected()) {
+            return;
+        }
+
         CompletableFuture.runAsync(() -> {
             try (Connection conn = mySQLManager.getConnection();
                  PreparedStatement statement = conn.prepareStatement("""
@@ -40,6 +44,10 @@ public class PlaytimeManager {
     }
 
     public void loadAllPlaytimes() {
+        if (!mySQLManager.isConnected()) {
+            return;
+        }
+
         CompletableFuture.runAsync(() -> {
 
             playtimeCache.clear();
@@ -66,6 +74,11 @@ public class PlaytimeManager {
     }
 
     public void loadPlayer(UUID uuid) {
+        if (!mySQLManager.isConnected()) {
+            playtimeCache.putIfAbsent(uuid, 0L);
+            return;
+        }
+
         CompletableFuture.runAsync(() -> {
 
             try (Connection conn = mySQLManager.getConnection();
@@ -112,6 +125,10 @@ public class PlaytimeManager {
     }
 
     private void savePlaytimeAsync(UUID uuid, long playtime) {
+        if (!mySQLManager.isConnected()) {
+            return;
+        }
+
         CompletableFuture.runAsync(() -> {
             try (Connection conn = mySQLManager.getConnection();
                  PreparedStatement statement = conn.prepareStatement("""

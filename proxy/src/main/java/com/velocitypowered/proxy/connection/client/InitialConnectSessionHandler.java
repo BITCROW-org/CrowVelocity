@@ -26,6 +26,7 @@ import com.velocitypowered.proxy.connection.backend.VelocityServerConnection;
 import com.velocitypowered.proxy.protocol.packet.PluginMessagePacket;
 import io.netty.buffer.ByteBufUtil;
 import io.netty.buffer.Unpooled;
+import net.kyori.adventure.text.Component;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -48,6 +49,14 @@ public class InitialConnectSessionHandler implements MinecraftSessionHandler {
 
   @Override
   public boolean handle(PluginMessagePacket packet) {
+    if (!server.getSallyLabsPatchManager().pluginMessageSecurity().isAllowed(packet,
+        server.getConfiguration().getSallyLabsPatchConfig())) {
+      logger.warn("{} sent a blocked plugin message on {} during initial connect",
+          player, packet.getChannel());
+      player.disconnect(Component.text("Plugin message rejected."));
+      return true;
+    }
+
     VelocityServerConnection serverConn = player.getConnectionInFlight();
     if (serverConn != null) {
       if (player.getPhase().handle(player, packet, serverConn)) {

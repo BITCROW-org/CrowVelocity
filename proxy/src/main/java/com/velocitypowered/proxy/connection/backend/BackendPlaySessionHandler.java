@@ -290,6 +290,13 @@ public class BackendPlaySessionHandler implements MinecraftSessionHandler {
 
   @Override
   public boolean handle(PluginMessagePacket packet) {
+    if (!server.getSallyLabsPatchManager().pluginMessageSecurity().isAllowed(packet,
+        server.getConfiguration().getSallyLabsPatchConfig())) {
+      logger.warn("Backend {} sent a blocked plugin message on {}",
+          serverConn.getServerInfo().getName(), packet.getChannel());
+      return true;
+    }
+
     if (bungeecordMessageResponder.process(packet)) {
       return true;
     }

@@ -83,6 +83,14 @@ public class LoginSessionHandler implements MinecraftSessionHandler {
   public boolean handle(LoginPluginMessagePacket packet) {
     MinecraftConnection mc = serverConn.ensureConnected();
     VelocityConfiguration configuration = server.getConfiguration();
+    int maxPayloadBytes = configuration.getSallyLabsPatchConfig().getMaxPluginMessageBytes();
+    if (maxPayloadBytes > 0 && packet.content().readableBytes() > maxPayloadBytes) {
+      logger.warn("Backend {} sent an oversized login plugin message on {}",
+          serverConn.getServerInfo().getName(), packet.getChannel());
+      mc.write(new LoginPluginResponsePacket(packet.getId(), false, Unpooled.EMPTY_BUFFER));
+      return true;
+    }
+
     if (configuration.getPlayerInfoForwardingMode() == PlayerInfoForwarding.MODERN
         && packet.getChannel().equals(PlayerDataForwarding.CHANNEL)) {
 

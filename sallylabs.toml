@@ -1,0 +1,97 @@
+# SallyLabs patch configuration.
+# This file contains only fork-local SallyLabs hardening and stability options.
+
+[general]
+# Master switch for SallyLabs proxy hardening.
+enabled = true
+
+[stability]
+# Maximum number of simultaneous first backend connection attempts.
+# When exceeded, players are handled by the SallyLabs limbo path.
+max-concurrent-initial-connects = 128
+
+# Minimum delay between server-switch attempts per player.
+# This reduces 1.20.2+ configuration-state race crashes during rapid /send or plugin redirects.
+server-switch-cooldown-millis = 750
+
+[limbo]
+# Lightweight fallback backend, e.g. a Minestom limbo server.
+enabled = true
+internal = false
+server = "limbo"
+retry-interval-millis = 5000
+recovery-servers = [
+    "lobby"
+]
+
+[security.login]
+# Login attempts from one IP over a 60-second window. Set to -1 to disable.
+max-logins-per-minute-per-ip = 8
+
+# Server-list pings from one IP over a 60-second window. Set to -1 to disable.
+max-pings-per-minute-per-ip = 60
+
+# Maximum simultaneous online players from one IP. Set to -1 to disable.
+max-players-per-ip = 4
+
+# Strict vanilla username syntax.
+username-pattern = "^[A-Za-z0-9_]{3,16}$"
+
+[security.host]
+# Reject suspiciously long virtual hosts. Set to -1 to disable.
+max-virtual-host-length = 255
+
+# If true, clients must send a virtual host in the handshake.
+require-virtual-host = false
+
+# If true, joins are accepted only through allowed hostnames below.
+# This is disabled by default so direct-IP joins keep working until you configure it.
+enforce-hostnames = false
+
+# If true, subdomains of allowed hostnames are accepted too.
+# Example: example.com also allows play.example.com and eu.play.example.com.
+allow-subdomains = true
+
+# Only used when enforce-hostnames is true.
+# Example: ["example.com", "play.example.net"]
+allowed-virtual-hosts = []
+
+[security.transfer]
+# Deny Minecraft transfer packets unless you explicitly need cross-host transfer.
+block-transfers = true
+
+[security.forwarding]
+# Warn when Velocity forwarding is disabled or legacy forwarding is used.
+warn-on-insecure-forwarding = true
+
+# If true, startup validation fails unless Velocity uses modern or BungeeGuard forwarding.
+require-secure-forwarding = false
+
+[security.commands]
+# Deny selected sensitive proxy commands for players.
+block-dangerous-commands = true
+
+# Command prefixes are matched after lowercasing and whitespace normalization.
+blocked-commands = [
+    "velocity plugins",
+    "velocity dump",
+    "velocity heap",
+    "velocity reload"
+]
+
+[security.plugin-messages]
+# Maximum plugin message payload copied or forwarded through the proxy.
+# Set to -1 to disable this guard.
+max-payload-bytes = 1048576
+
+# Maximum plugin message channel identifier length. Set to -1 to disable.
+max-channel-length = 64
+
+# Blocks legacy BungeeCord plugin-message forwarding unless explicitly needed.
+block-legacy-bungee = true
+
+# Plugin-message channels denied in both directions.
+blocked-channels = [
+    "bungeecord",
+    "bungee:main"
+]

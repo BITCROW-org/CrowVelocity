@@ -319,6 +319,13 @@ public class AuthSessionHandler implements MinecraftSessionHandler {
     return server.getEventManager().fire(event).thenRunAsync(() -> {
       Optional<RegisteredServer> toTry = event.getInitialServer();
       if (toTry.isEmpty()) {
+        if (server.getSallyLabsPatchManager().limboRecovery().isInternalLimboEnabled()) {
+          logger.warn("{} joined while no backend server is available; internal limbo is not "
+              + "spawnable yet", player);
+          player.disconnect0(ConnectedPlayer.SALLYLABS_NO_BACKEND_AVAILABLE, true);
+          return;
+        }
+
         player.disconnect0(
             Component.translatable("velocity.error.no-available-servers", NamedTextColor.RED),
             true);

@@ -124,6 +124,14 @@ public class ClientConfigSessionHandler implements MinecraftSessionHandler {
 
   @Override
   public boolean handle(final PluginMessagePacket packet) {
+    if (!server.getSallyLabsPatchManager().pluginMessageSecurity().isAllowed(packet,
+        server.getConfiguration().getSallyLabsPatchConfig())) {
+      logger.warn("{} sent a blocked config plugin message on {}",
+          player, packet.getChannel());
+      player.disconnect(Component.text("Plugin message rejected."));
+      return true;
+    }
+
     final VelocityServerConnection serverConn = player.getConnectionInFlight();
     if (PluginMessageUtil.isMcBrand(packet)) {
       final String brand = PluginMessageUtil.readBrandMessage(packet.content());

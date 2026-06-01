@@ -32,6 +32,7 @@ import com.velocitypowered.proxy.config.migration.KeyAuthenticationMigration;
 import com.velocitypowered.proxy.config.migration.MiniMessageTranslationsMigration;
 import com.velocitypowered.proxy.config.migration.MotdMigration;
 import com.velocitypowered.proxy.config.migration.TransferIntegrationMigration;
+import com.velocitypowered.proxy.sallylabs.patch.config.SallyLabsPatchConfig;
 import com.velocitypowered.proxy.util.AddressUtil;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import java.io.IOException;
@@ -96,6 +97,8 @@ public class VelocityConfiguration implements ProxyConfig {
   private boolean forceKeyAuthentication = true; // Added in 1.19
   @Expose
   private PacketLimiterConfig packetLimiterConfig = PacketLimiterConfig.DEFAULT;
+  @Expose
+  private SallyLabsPatchConfig sallyLabsPatchConfig = SallyLabsPatchConfig.DEFAULT;
 
   private VelocityConfiguration(Servers servers, ForcedHosts forcedHosts, Advanced advanced,
       Query query, Metrics metrics) {
@@ -112,7 +115,8 @@ public class VelocityConfiguration implements ProxyConfig {
       boolean onlineModeKickExistingPlayers, PingPassthroughMode pingPassthrough,
       boolean samplePlayersInPing, boolean enablePlayerAddressLogging, Servers servers,
       ForcedHosts forcedHosts, Advanced advanced, Query query, Metrics metrics,
-      boolean forceKeyAuthentication, PacketLimiterConfig packetLimiterConfig) {
+      boolean forceKeyAuthentication, PacketLimiterConfig packetLimiterConfig,
+      SallyLabsPatchConfig sallyLabsPatchConfig) {
     this.bind = bind;
     this.motd = motd;
     this.showMaxPlayers = showMaxPlayers;
@@ -132,6 +136,7 @@ public class VelocityConfiguration implements ProxyConfig {
     this.metrics = metrics;
     this.forceKeyAuthentication = forceKeyAuthentication;
     this.packetLimiterConfig = packetLimiterConfig;
+    this.sallyLabsPatchConfig = sallyLabsPatchConfig;
   }
 
   /**
@@ -171,6 +176,18 @@ public class VelocityConfiguration implements ProxyConfig {
       }
     }
 
+    if (sallyLabsPatchConfig.isRequireSecureForwarding()
+        && playerInfoForwardingMode != PlayerInfoForwarding.MODERN
+        && playerInfoForwardingMode != PlayerInfoForwarding.BUNGEEGUARD) {
+      logger.error("SallyLabs security requires modern or BungeeGuard player info forwarding.");
+      valid = false;
+    } else if (sallyLabsPatchConfig.isWarnOnInsecureForwarding()
+        && playerInfoForwardingMode != PlayerInfoForwarding.MODERN
+        && playerInfoForwardingMode != PlayerInfoForwarding.BUNGEEGUARD) {
+      logger.warn("SallyLabs security: backend servers must be firewalled and should use modern "
+          + "or BungeeGuard forwarding to reduce proxy-bypass impersonation risk.");
+    }
+
     if (servers.getServers().isEmpty()) {
       logger.warn("You don't have any servers configured.");
     }
@@ -188,6 +205,22 @@ public class VelocityConfiguration implements ProxyConfig {
       if (!servers.getServers().containsKey(s)) {
         logger.error("Fallback server " + s + " is not registered in your configuration!");
         valid = false;
+      }
+    }
+
+    if (sallyLabsPatchConfig.isLimboEnabled() && !sallyLabsPatchConfig.isInternalLimbo()) {
+      if (!servers.getServers().containsKey(sallyLabsPatchConfig.getLimboServer())) {
+        logger.error("SallyLabs limbo server '{}' is not registered in your configuration!",
+            sallyLabsPatchConfig.getLimboServer());
+        valid = false;
+      }
+
+      for (String server : sallyLabsPatchConfig.getLimboRecoveryServers()) {
+        if (!servers.getServers().containsKey(server)) {
+          logger.error("SallyLabs limbo recovery server '{}' is not registered in your "
+              + "configuration!", server);
+          valid = false;
+        }
       }
     }
 
@@ -453,6 +486,10 @@ public class VelocityConfiguration implements ProxyConfig {
     return packetLimiterConfig;
   }
 
+  public SallyLabsPatchConfig getSallyLabsPatchConfig() {
+    return sallyLabsPatchConfig;
+  }
+
   @Override
   public String toString() {
     return MoreObjects.toStringHelper(this)
@@ -471,6 +508,7 @@ public class VelocityConfiguration implements ProxyConfig {
         .add("enablePlayerAddressLogging", enablePlayerAddressLogging)
         .add("forceKeyAuthentication", forceKeyAuthentication)
         .add("packetLimiterConfig", packetLimiterConfig)
+        .add("sallyLabsPatchConfig", sallyLabsPatchConfig)
         .toString();
   }
 
@@ -568,6 +606,8 @@ public class VelocityConfiguration implements ProxyConfig {
       final boolean enablePlayerAddressLogging = config.getOrElse(
               "enable-player-address-logging", true);
       final PacketLimiterConfig packetLimiterConfig = PacketLimiterConfig.fromConfig(config.get("packet-limiter"));
+      final SallyLabsPatchConfig sallyLabsPatchConfig = SallyLabsPatchConfig.read(
+          path.resolveSibling("sallylabs.toml"));
 
       // Throw an exception if the forwarding-secret file is empty and the proxy is using a
       // forwarding mode that requires it.
@@ -596,7 +636,8 @@ public class VelocityConfiguration implements ProxyConfig {
               new Query(queryConfig),
               new Metrics(metricsConfig),
               forceKeyAuthentication,
-              packetLimiterConfig
+              packetLimiterConfig,
+              sallyLabsPatchConfig
       );
     }
   }

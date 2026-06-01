@@ -72,6 +72,8 @@ import com.velocitypowered.proxy.plugin.virtual.VelocityVirtualPlugin;
 import com.velocitypowered.proxy.protocol.ProtocolUtils;
 import com.velocitypowered.proxy.protocol.util.FaviconSerializer;
 import com.velocitypowered.proxy.protocol.util.GameProfileSerializer;
+import com.velocitypowered.proxy.sallylabs.patch.SallyLabsPatchManager;
+import com.velocitypowered.proxy.sallylabs.patch.security.SallyLabsSecurityListener;
 import com.velocitypowered.proxy.scheduler.VelocityScheduler;
 import com.velocitypowered.proxy.server.ServerMap;
 import com.velocitypowered.proxy.util.*;
@@ -196,6 +198,7 @@ public class VelocityServer implements ProxyServer, ForwardingAudience {
   private final JsonConfig configCfg;
   private final PlayerManager playerManager;
   private final PlaytimeManager playtimeManager;
+  private final SallyLabsPatchManager sallyLabsPatchManager;
   private static Component PREFIX;
   private static Component PREFIX2;
 
@@ -223,6 +226,7 @@ public class VelocityServer implements ProxyServer, ForwardingAudience {
     mySQLManager = new MySQLManager();
     playerManager = new PlayerManager(mySQLManager);
     playtimeManager = new PlaytimeManager(mySQLManager);
+    sallyLabsPatchManager = new SallyLabsPatchManager(this);
   }
 
   public KeyPair getServerKeyPair() {
@@ -297,9 +301,11 @@ public class VelocityServer implements ProxyServer, ForwardingAudience {
     tabCompleteRateLimiter = Ratelimiters.createWithMilliseconds(configuration.getTabCompleteRatelimit());
 
     connectMySQL();
-    playerManager.createTable();
-    playtimeManager.createTable();
-    playtimeManager.loadAllPlaytimes();
+    if (mySQLManager.isConnected()) {
+      playerManager.createTable();
+      playtimeManager.createTable();
+      playtimeManager.loadAllPlaytimes();
+    }
 
     loadPlugins();
 
@@ -336,6 +342,11 @@ public class VelocityServer implements ProxyServer, ForwardingAudience {
   }
 
   private void connectMySQL() {
+    if (!getMysqlCfg().getBoolean("mysql.enabled", false)) {
+      logger.info("[Main] MySQL disabled by config, skipping...");
+      return;
+    }
+
     boolean ok = mySQLManager.connect(
             getMysqlCfg().getString("mysql.host", "localhost"),
             getMysqlCfg().getInt("mysql.port", 3306),
@@ -362,6 +373,7 @@ public class VelocityServer implements ProxyServer, ForwardingAudience {
 
     getEventManager().register(VelocityVirtualPlugin.INSTANCE, new ServerPingListener(this));
     getEventManager().register(VelocityVirtualPlugin.INSTANCE, new LabyListener(this));
+    getEventManager().register(VelocityVirtualPlugin.INSTANCE, new SallyLabsSecurityListener(this));
     final BrigadierCommand callbackCommand = CallbackCommand.create();
     commandManager.register(
             commandManager.metaBuilder(callbackCommand)
@@ -726,7 +738,9 @@ public class VelocityServer implements ProxyServer, ForwardingAudience {
 
   public void onShutdown() {
 
-    playerManager.clearAllPlayersFromDB();
+    if (mySQLManager.isConnected()) {
+      playerManager.clearAllPlayersFromDB();
+    }
 
     for (Player p : getAllPlayers()) {
       playerManager.removePlayer(p.getUniqueId());
@@ -913,6 +927,10 @@ public class VelocityServer implements ProxyServer, ForwardingAudience {
     return scheduler;
   }
 
+  public SallyLabsPatchManager getSallyLabsPatchManager() {
+    return sallyLabsPatchManager;
+  }
+
   @Override
   public VelocityChannelRegistrar getChannelRegistrar() {
     return channelRegistrar;
@@ -933,10 +951,12 @@ public class VelocityServer implements ProxyServer, ForwardingAudience {
   }
 
   public void registerScheduler() {
-    this.getScheduler()
-            .buildTask(VelocityVirtualPlugin.INSTANCE, playerManager::reloadPlayersFromDatabase)
-            .repeat(Duration.ofSeconds(30))
-            .schedule();
+    if (mySQLManager.isConnected()) {
+      this.getScheduler()
+              .buildTask(VelocityVirtualPlugin.INSTANCE, playerManager::reloadPlayersFromDatabase)
+              .repeat(Duration.ofSeconds(30))
+              .schedule();
+    }
 
     PlaytimeScheduler.startUpdater(this, playtimeManager);
 

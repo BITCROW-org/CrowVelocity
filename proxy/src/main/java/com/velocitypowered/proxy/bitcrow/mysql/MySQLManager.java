@@ -53,6 +53,9 @@ public class MySQLManager {
         }
     }
     public Connection getConnection() throws SQLException {
+        if (!isConnected()) {
+            throw new SQLException("MySQL is disabled or not connected.");
+        }
         return dataSource.getConnection();
     }
 }

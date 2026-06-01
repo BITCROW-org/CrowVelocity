@@ -272,6 +272,13 @@ public class ConfigSessionHandler implements MinecraftSessionHandler {
 
   @Override
   public boolean handle(PluginMessagePacket packet) {
+    if (!server.getSallyLabsPatchManager().pluginMessageSecurity().isAllowed(packet,
+        server.getConfiguration().getSallyLabsPatchConfig())) {
+      logger.warn("Backend {} sent a blocked config plugin message on {}",
+          serverConn.getServerInfo().getName(), packet.getChannel());
+      return true;
+    }
+
     if (PluginMessageUtil.isMcBrand(packet)) {
       serverConn.getPlayer().getConnection().write(
           PluginMessageUtil.rewriteMinecraftBrand(packet, server.getVersion(),

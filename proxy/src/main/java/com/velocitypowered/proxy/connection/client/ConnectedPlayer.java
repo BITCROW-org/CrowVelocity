@@ -95,6 +95,7 @@ import com.velocitypowered.proxy.protocol.packet.config.StartUpdatePacket;
 import com.velocitypowered.proxy.protocol.packet.title.GenericTitlePacket;
 import com.velocitypowered.proxy.protocol.util.ByteBufDataOutput;
 import com.velocitypowered.proxy.server.VelocityRegisteredServer;
+import com.velocitypowered.proxy.sallylabs.patch.config.SallyLabsPatchConfig;
 import com.velocitypowered.proxy.tablist.InternalTabList;
 import com.velocitypowered.proxy.tablist.KeyedVelocityTabList;
 import com.velocitypowered.proxy.tablist.VelocityTabList;
@@ -156,6 +157,8 @@ public class ConnectedPlayer implements MinecraftConnectionAssociation, Player, 
   private static final PlainTextComponentSerializer PASS_THRU_TRANSLATE =
       PlainTextComponentSerializer.builder().flattener(TranslatableMapper.FLATTENER).build();
   static final PermissionProvider DEFAULT_PERMISSIONS = s -> PermissionFunction.ALWAYS_UNDEFINED;
+  public static final Component SALLYLABS_NO_BACKEND_AVAILABLE = Component.text(
+      "Zurzeit ist kein Server erreichbar. Bitte versuche es gleich erneut.", NamedTextColor.RED);
 
   private static final ComponentLogger logger = ComponentLogger.logger(ConnectedPlayer.class);
 
@@ -196,6 +199,7 @@ public class ConnectedPlayer implements MinecraftConnectionAssociation, Player, 
   private @MonotonicNonNull List<String> serversToTry = null;
   private final ResourcePackHandler resourcePackHandler;
   private final BundleDelimiterHandler bundleHandler = new BundleDelimiterHandler(this);
+  private long lastSallyLabsServerSwitchAttemptAt;
 
   private @Nullable String clientBrand;
   private @Nullable Locale effectiveLocale;
@@ -711,6 +715,30 @@ public class ConnectedPlayer implements MinecraftConnectionAssociation, Player, 
       }
     }
 
+    if (isSallyLabsInternalLimboAvailable() && connectedServer == null) {
+      logger.warn("{}: backend {} is unreachable; SallyLabs internal limbo has no virtual "
+              + "spawn implementation yet",
+          this, server.getServerInfo().getName());
+      disconnect(SALLYLABS_NO_BACKEND_AVAILABLE);
+      return;
+    }
+
+    if (isSallyLabsLimbo(server) && connectedServer == null) {
+      logger.warn("{}: SallyLabs limbo server {} is unreachable; no backend is available",
+          this, server.getServerInfo().getName());
+      disconnect(SALLYLABS_NO_BACKEND_AVAILABLE);
+      return;
+    }
+
+    if (connectedServer == null
+        && this.server.getSallyLabsPatchManager().limboRecovery()
+            .getLimboServerIfDifferent(this).isPresent()) {
+      logger.warn("{}: backend {} is unreachable; redirecting to SallyLabs limbo",
+          this, server.getServerInfo().getName());
+      handleConnectionException(server, null, SALLYLABS_NO_BACKEND_AVAILABLE, safe);
+      return;
+    }
+
     Component friendlyError;
     if (connectedServer != null && connectedServer.getServerInfo().equals(server.getServerInfo())) {
       friendlyError = Component.translatable("velocity.error.connected-server-error",
@@ -740,6 +768,24 @@ public class ConnectedPlayer implements MinecraftConnectionAssociation, Player, 
 
     Component disconnectReason = disconnect.getReason().getComponent();
     String plainTextReason = PASS_THRU_TRANSLATE.serialize(disconnectReason);
+    if (isSallyLabsInternalLimboAvailable() && connectedServer == null) {
+      if (this.server.getConfiguration().isLogPlayerConnections()) {
+        logger.warn("{}: backend {} disconnected during connect; SallyLabs internal limbo is "
+            + "not spawnable yet: {}", this, server.getServerInfo().getName(), plainTextReason);
+      }
+      disconnect(SALLYLABS_NO_BACKEND_AVAILABLE);
+      return;
+    }
+
+    if (isSallyLabsLimbo(server) && connectedServer == null) {
+      if (this.server.getConfiguration().isLogPlayerConnections()) {
+        logger.warn("{}: SallyLabs limbo server {} disconnected during connect: {}", this,
+            server.getServerInfo().getName(), plainTextReason);
+      }
+      disconnect(SALLYLABS_NO_BACKEND_AVAILABLE);
+      return;
+    }
+
     if (connectedServer != null && connectedServer.getServerInfo().equals(server.getServerInfo())) {
       if (this.server.getConfiguration().isLogPlayerConnections()) {
         logger.info("{}: kicked from server {}: {}", this, server.getServerInfo().getName(),
@@ -781,6 +827,9 @@ public class ConnectedPlayer implements MinecraftConnectionAssociation, Player, 
     ServerKickResult result;
     if (kickedFromCurrent) {
       Optional<RegisteredServer> next = getNextServerToTry(rs);
+      if (next.isEmpty() && !isSallyLabsLimbo(rs)) {
+        next = server.getSallyLabsPatchManager().limboRecovery().getLimboServerIfDifferent(this);
+      }
       result =
           next.map(RedirectPlayer::create).orElseGet(() -> DisconnectPlayer.create(friendlyReason));
     } else {
@@ -919,6 +968,16 @@ public class ConnectedPlayer implements MinecraftConnectionAssociation, Player, 
     return server.getServerInfo().getName().equalsIgnoreCase(name);
   }
 
+  private boolean isSallyLabsLimbo(RegisteredServer server) {
+    return this.server.getConfiguration().getSallyLabsPatchConfig().isLimboEnabled()
+        && server.getServerInfo().getName().equalsIgnoreCase(
+            this.server.getConfiguration().getSallyLabsPatchConfig().getLimboServer());
+  }
+
+  private boolean isSallyLabsInternalLimboAvailable() {
+    return this.server.getConfiguration().getSallyLabsPatchConfig().isInternalLimbo();
+  }
+
   /**
    * Sets the player's new connected server and clears the in-flight connection.
    *
@@ -927,6 +986,12 @@ public class ConnectedPlayer implements MinecraftConnectionAssociation, Player, 
   public void setConnectedServer(@Nullable VelocityServerConnection serverConnection) {
     this.connectedServer = serverConnection;
     this.tryIndex = 0; // reset since we got connected to a server
+
+    if (serverConnection != null && isSallyLabsLimbo(serverConnection.getServer())) {
+      server.getSallyLabsPatchManager().limboRecovery().startRecovery(this);
+    } else {
+      server.getSallyLabsPatchManager().limboRecovery().stopRecovery(this);
+    }
 
     if (serverConnection == connectionInFlight) {
       connectionInFlight = null;
@@ -963,6 +1028,7 @@ public class ConnectedPlayer implements MinecraftConnectionAssociation, Player, 
     Optional<Player> connectedPlayer = server.getPlayer(this.getUniqueId());
 
     server.unregisterConnection(this);
+    server.getSallyLabsPatchManager().limboRecovery().stopRecovery(this);
 
     server.getPlayerManager().removePlayer(this.getUniqueId());
     server.getPlaytimeManager().unloadPlayer(this.getUniqueId());
@@ -1479,7 +1545,26 @@ public class ConnectedPlayer implements MinecraftConnectionAssociation, Player, 
     }
 
     private CompletableFuture<Optional<Status>> getInitialStatus() {
-      return CompletableFuture.supplyAsync(() -> checkServer(toConnect), connection.eventLoop());
+      return CompletableFuture.supplyAsync(() -> {
+        Optional<ConnectionRequestBuilder.Status> serverCheck = checkServer(toConnect);
+        return serverCheck.isPresent() ? serverCheck : checkSallyLabsServerSwitchCooldown();
+      }, connection.eventLoop());
+    }
+
+    private Optional<ConnectionRequestBuilder.Status> checkSallyLabsServerSwitchCooldown() {
+      SallyLabsPatchConfig config = server.getConfiguration().getSallyLabsPatchConfig();
+      int cooldownMillis = config.getServerSwitchCooldownMillis();
+      if (!config.isEnabled() || cooldownMillis <= 0 || previousServer == null
+          || isSallyLabsLimbo(toConnect)) {
+        return Optional.empty();
+      }
+
+      long now = System.currentTimeMillis();
+      if (now - lastSallyLabsServerSwitchAttemptAt < cooldownMillis) {
+        return Optional.of(ConnectionRequestBuilder.Status.CONNECTION_IN_PROGRESS);
+      }
+      lastSallyLabsServerSwitchAttemptAt = now;
+      return Optional.empty();
     }
 
     private CompletableFuture<Impl> internalConnect() {
@@ -1488,11 +1573,29 @@ public class ConnectedPlayer implements MinecraftConnectionAssociation, Player, 
           return completedFuture(plainResult(initialCheck.get(), toConnect));
         }
 
+        SallyLabsPatchConfig config = server.getConfiguration().getSallyLabsPatchConfig();
+        boolean trackSallyLabsJoin = shouldTrackSallyLabsInitialConnect(toConnect, config);
+        boolean acquiredSallyLabsJoinSlot = false;
+        RegisteredServer firstDestination = toConnect;
+        if (trackSallyLabsJoin) {
+          acquiredSallyLabsJoinSlot = server.getSallyLabsPatchManager().joinThrottle()
+              .tryAcquire(config.getMaxConcurrentInitialConnects());
+          if (!acquiredSallyLabsJoinSlot) {
+            firstDestination = server.getSallyLabsPatchManager().limboRecovery()
+                .getLimboServerIfDifferent(ConnectedPlayer.this)
+                .orElse(toConnect);
+          }
+        }
+        final boolean releaseSallyLabsJoinSlot = acquiredSallyLabsJoinSlot;
+
         ServerPreConnectEvent event =
-            new ServerPreConnectEvent(ConnectedPlayer.this, toConnect, previousServer);
+            new ServerPreConnectEvent(ConnectedPlayer.this, firstDestination, previousServer);
         return server.getEventManager().fire(event).thenComposeAsync(newEvent -> {
           Optional<RegisteredServer> newDest = newEvent.getResult().getServer();
           if (newDest.isEmpty()) {
+            if (releaseSallyLabsJoinSlot) {
+              server.getSallyLabsPatchManager().joinThrottle().release();
+            }
             return completedFuture(
                 plainResult(ConnectionRequestBuilder.Status.CONNECTION_CANCELLED, toConnect));
           }
@@ -1500,6 +1603,9 @@ public class ConnectedPlayer implements MinecraftConnectionAssociation, Player, 
           RegisteredServer realDestination = newDest.get();
           Optional<ConnectionRequestBuilder.Status> check = checkServer(realDestination);
           if (check.isPresent()) {
+            if (releaseSallyLabsJoinSlot) {
+              server.getSallyLabsPatchManager().joinThrottle().release();
+            }
             return completedFuture(plainResult(check.get(), realDestination));
           }
 
@@ -1509,6 +1615,9 @@ public class ConnectedPlayer implements MinecraftConnectionAssociation, Player, 
           connectionInFlight = con;
 
           return con.connect().whenCompleteAsync((result, exception) -> {
+            if (releaseSallyLabsJoinSlot) {
+              server.getSallyLabsPatchManager().joinThrottle().release();
+            }
             if (result != null && !result.isSuccessful() && !result.isSafe()) {
               handleConnectionException(result.getAttemptedConnection(),
                   // The only way for the reason to be null is if the result is safe
@@ -1520,6 +1629,12 @@ public class ConnectedPlayer implements MinecraftConnectionAssociation, Player, 
               connection.eventLoop());
         }, connection.eventLoop());
       });
+    }
+
+    private boolean shouldTrackSallyLabsInitialConnect(RegisteredServer requested,
+                                                       SallyLabsPatchConfig config) {
+      return config.isEnabled() && previousServer == null && connectedServer == null
+          && !isSallyLabsLimbo(requested);
     }
 
     private void resetIfInFlightIs(VelocityServerConnection establishedConnection) {
