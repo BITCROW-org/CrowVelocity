@@ -36,20 +36,33 @@ import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
+import net.kyori.adventure.text.format.TextDecoration;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+
+import javax.swing.text.StyleContext;
 
 /**
  * Event-level hardening for public proxy entrypoints.
  */
 public final class SallyLabsSecurityListener {
 
-  private static final Logger logger = LogManager.getLogger(SallyLabsSecurityListener.class);
-  private static final Component SECURITY_DENY = Component.text(
-      "Verbindung aus Sicherheitsgruenden abgelehnt.", NamedTextColor.RED);
-  private static final Component COMMAND_DENY = Component.text(
-      "Dieser Proxy-Befehl ist deaktiviert.", NamedTextColor.RED);
-  private static final long ONE_MINUTE_MILLIS = 60_000L;
+    private static final Logger logger = LogManager.getLogger(SallyLabsSecurityListener.class);
+    private static final long ONE_MINUTE_MILLIS = 60_000L;
+
+    private static final Component SECURITY_DENY = Component.text()
+            .append(Component.text("⛔", NamedTextColor.RED)
+                    .decorate(TextDecoration.BOLD))
+            .appendNewline()
+            .appendNewline()
+            .append(Component.text("Deine Verbindung wurde aus Sicherheitsgründen blockiert.", NamedTextColor.GRAY))
+            .appendNewline()
+            .append(Component.text("Bitte versuche es in einigen Minuten erneut.", NamedTextColor.GRAY))
+            .appendNewline()
+            .appendNewline()
+            .build();
+
+    private static final Component COMMAND_DENY = Component.empty(); //Maybe remove later tab completion
 
   private final VelocityServer server;
   private final WindowRateLimiter loginLimiter = new WindowRateLimiter(ONE_MINUTE_MILLIS);
