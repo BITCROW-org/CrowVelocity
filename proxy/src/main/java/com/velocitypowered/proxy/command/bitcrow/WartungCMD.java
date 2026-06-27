@@ -19,7 +19,7 @@ public class WartungCMD {
     public static BrigadierCommand command(final VelocityServer server) {
         return new BrigadierCommand(
                 LiteralArgumentBuilder.<CommandSource>literal("vwartung")
-                        .requires(source -> source.hasPermission("bitcrow.netzwerkwartung"))
+                        .requires(source -> source.hasPermission("bitcrow.command.netzwerkwartung.set"))
                         .executes(context -> {
                             CommandSource sender = context.getSource();
 
@@ -56,7 +56,7 @@ public class WartungCMD {
                                             );
 
                                             for (Player player : server.getAllPlayers()) {
-                                                if (!player.hasPermission("bitcrow.wartung.join")) {
+                                                if (!player.hasPermission("bitcrow.netzwerkwartung.join")) {
                                                     player.disconnect(
                                                             VelocityServer.getPREFIX2()
                                                                     .appendNewline()

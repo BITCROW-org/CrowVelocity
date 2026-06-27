@@ -31,7 +31,7 @@ public class TeamChatCMD {
     public static BrigadierCommand command(final VelocityServer server) {
         return new BrigadierCommand(
                 LiteralArgumentBuilder.<CommandSource>literal("teamchat")
-                        .requires(source -> source instanceof Player && source.hasPermission("group.team"))
+                        .requires(source -> source instanceof Player && source.hasPermission("bitcrow.command.teamchat"))
 
                         .executes(context -> {
                             Player player = (Player) context.getSource();
@@ -40,11 +40,11 @@ public class TeamChatCMD {
                             setTeamChatEnabled(player.getUniqueId(), !currentStatus);
 
                             if (currentStatus) {
-                                player.sendMessage(server.getPREFIX().append(
+                                player.sendMessage(VelocityServer.getPREFIX().append(
                                         Component.text("Du hast den TeamChat deaktiviert.", NamedTextColor.RED)
                                 ));
                             } else {
-                                player.sendMessage(server.getPREFIX().append(
+                                player.sendMessage(VelocityServer.getPREFIX().append(
                                         Component.text("Du hast den TeamChat aktiviert.", NamedTextColor.GREEN)
                                 ));
                             }
@@ -57,7 +57,7 @@ public class TeamChatCMD {
                                     String message = StringArgumentType.getString(context, "message");
 
                                     if (!isTeamChatEnabled(sender.getUniqueId())) {
-                                        sender.sendMessage(server.getPREFIX().append(
+                                        sender.sendMessage(VelocityServer.getPREFIX().append(
                                                 Component.text("Du hast den TeamChat deaktiviert. Aktiviere ihn mit /teamchat, um Nachrichten zu senden/sehen.", NamedTextColor.RED)
                                         ));
                                         return Command.SINGLE_SUCCESS;
@@ -67,14 +67,14 @@ public class TeamChatCMD {
                                             .map(srv -> srv.getServerInfo().getName())
                                             .orElse("Unbekannt");
 
-                                    Component format = Component.text("[TeamChat] ", NamedTextColor.GOLD)
+                                    Component format = VelocityServer.getTeamChatPrefix()
                                             .append(Component.text("[" + currentServerName + "] ", NamedTextColor.GRAY))
                                             .append(Component.text(sender.getUsername(), NamedTextColor.YELLOW))
                                             .append(Component.text(": ", NamedTextColor.DARK_GRAY))
                                             .append(Component.text(message, NamedTextColor.WHITE));
 
                                     for (Player target : server.getAllPlayers()) {
-                                        if (target.hasPermission("group.team") && isTeamChatEnabled(target.getUniqueId())) {
+                                        if (target.hasPermission("bitcrow.command.teamchat") && isTeamChatEnabled(target.getUniqueId())) {
                                             target.sendMessage(format);
                                         }
                                     }

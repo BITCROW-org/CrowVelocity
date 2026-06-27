@@ -46,7 +46,7 @@ public class ServerPingListener {
 
     @Subscribe
     public void onJoin(PostLoginEvent event) {
-        if (!event.getPlayer().hasPermission("bitcrow.wartung.join")) {
+        if (!event.getPlayer().hasPermission("bitcrow.netzwerkwartung.join")) {
             if (WartungCMD.isMaintenanceMode(server)) {
                 event.getPlayer().disconnect(
                         Component.text()

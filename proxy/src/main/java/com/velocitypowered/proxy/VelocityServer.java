@@ -38,20 +38,14 @@ import com.velocitypowered.api.proxy.server.ServerInfo;
 import com.velocitypowered.api.util.Favicon;
 import com.velocitypowered.api.util.GameProfile;
 import com.velocitypowered.api.util.ProxyVersion;
+import com.velocitypowered.proxy.bitcrow.MinigamesManager;
 import com.velocitypowered.proxy.bitcrow.player.PlayerManager;
 import com.velocitypowered.proxy.bitcrow.player.PlaytimeManager;
 import com.velocitypowered.proxy.bitcrow.scheduler.PlaytimeScheduler;
 import com.velocitypowered.proxy.bitcrow.scheduler.TablistScheduler;
 import com.velocitypowered.proxy.command.VelocityCommandManager;
-import com.velocitypowered.proxy.command.bitcrow.FindCMD;
-import com.velocitypowered.proxy.command.bitcrow.LobbyCMD;
-import com.velocitypowered.proxy.command.bitcrow.WartungCMD;
-import com.velocitypowered.proxy.command.builtin.CallbackCommand;
-import com.velocitypowered.proxy.command.builtin.GlistCommand;
-import com.velocitypowered.proxy.command.builtin.SendCommand;
-import com.velocitypowered.proxy.command.builtin.ServerCommand;
-import com.velocitypowered.proxy.command.builtin.ShutdownCommand;
-import com.velocitypowered.proxy.command.builtin.VelocityCommand;
+import com.velocitypowered.proxy.command.bitcrow.*;
+import com.velocitypowered.proxy.command.builtin.*;
 import com.velocitypowered.proxy.config.ConfigManager;
 import com.velocitypowered.proxy.config.JsonConfig;
 import com.velocitypowered.proxy.config.VelocityConfiguration;
@@ -114,6 +108,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.IntFunction;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+
+import lombok.Getter;
 import net.kyori.adventure.audience.Audience;
 import net.kyori.adventure.audience.ForwardingAudience;
 import net.kyori.adventure.key.Key;
@@ -121,7 +117,6 @@ import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.TextColor;
 import net.kyori.adventure.text.minimessage.translation.MiniMessageTranslationStore;
 import net.kyori.adventure.translation.GlobalTranslator;
-import net.labymod.serverapi.server.velocity.LabyModProtocolService;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.bstats.MetricsBase;
@@ -139,6 +134,7 @@ public class VelocityServer implements ProxyServer, ForwardingAudience {
   public static final String VELOCITY_URL = "https://papermc.io/software/velocity";
 
   private static final Logger logger = LogManager.getLogger(VelocityServer.class);
+  @Getter
   private static final org.slf4j.Logger labyLogger = LoggerFactory.getLogger(VelocityServer.class);
   public static final Gson GENERAL_GSON = new GsonBuilder()
       .registerTypeHierarchyAdapter(Favicon.class, FaviconSerializer.INSTANCE)
@@ -174,10 +170,12 @@ public class VelocityServer implements ProxyServer, ForwardingAudience {
   private final ConnectionManager cm;
   private final ProxyOptions options;
   private @MonotonicNonNull VelocityConfiguration configuration;
+  @Getter
   private @MonotonicNonNull KeyPair serverKeyPair;
   private final ServerMap servers;
   private final VelocityCommandManager commandManager;
   private final AtomicBoolean shutdownInProgress = new AtomicBoolean(false);
+  @Getter
   private boolean shutdown = false;
   private final VelocityPluginManager pluginManager;
 
@@ -190,17 +188,32 @@ public class VelocityServer implements ProxyServer, ForwardingAudience {
   private final VelocityEventManager eventManager;
   private final VelocityScheduler scheduler;
   private final VelocityChannelRegistrar channelRegistrar = new VelocityChannelRegistrar();
+  @Getter
   private final ServerListPingHandler serverListPingHandler;
+  @Getter
   private final ConfigManager configManager;
+  @Getter
   private final MySQLManager mySQLManager;
+  @Getter
   private final JsonConfig lobbyCfg;
+  @Getter
   private final JsonConfig mysqlCfg;
+  @Getter
   private final JsonConfig configCfg;
+  @Getter
   private final PlayerManager playerManager;
+  @Getter
   private final PlaytimeManager playtimeManager;
+  @Getter
   private final SallyLabsPatchManager sallyLabsPatchManager;
+  @Getter
   private static Component PREFIX;
+  @Getter
   private static Component PREFIX2;
+  @Getter
+  private static Component TeamChatPrefix;
+  @Getter
+  private static MinigamesManager minigamesManager;
 
   VelocityServer(final ProxyOptions options) {
     pluginManager = new VelocityPluginManager(this);
@@ -223,17 +236,17 @@ public class VelocityServer implements ProxyServer, ForwardingAudience {
     PREFIX2 = GradientComponentFormatter.applyGradient(
             rawMini
     );
+    String rawMiniTeamChat = UtilsManager.MiniFontConvert("<#2f5bd6>BITCROW-TEAM<#70d4fc>");
+    TeamChatPrefix = GradientComponentFormatter.applyGradient(rawMiniTeamChat)
+            .append(Component.text(" | ")
+                    .color(TextColor.color(0xA8A8A8)));
     mySQLManager = new MySQLManager();
     playerManager = new PlayerManager(mySQLManager);
     playtimeManager = new PlaytimeManager(mySQLManager);
     sallyLabsPatchManager = new SallyLabsPatchManager(this);
   }
 
-  public KeyPair getServerKeyPair() {
-    return serverKeyPair;
-  }
-
-  @Override
+    @Override
   public VelocityConfiguration getConfiguration() {
     return this.configuration;
   }
@@ -275,6 +288,7 @@ public class VelocityServer implements ProxyServer, ForwardingAudience {
     logger.info("Booting up {} {}...", getVersion().getName(), getVersion().getVersion());
     console.setupStreams();
     pluginManager.registerPlugin(this.createVirtualPlugin());
+    minigamesManager = new MinigamesManager(this);
 
     serverKeyPair = EncryptionUtils.createRsaKeyPair(1024);
 
@@ -339,6 +353,7 @@ public class VelocityServer implements ProxyServer, ForwardingAudience {
       logger.warn("debug environment, metrics is disabled!");
     }
     registerScheduler();
+    VeloCrow veloCrow = new VeloCrow(this);
   }
 
   private void connectMySQL() {
@@ -424,9 +439,35 @@ public class VelocityServer implements ProxyServer, ForwardingAudience {
             vwartungCommand
     );
 
+    final BrigadierCommand teamchatCommand = TeamChatCMD.command(this);
+    registerCommand(commandManager, teamchatCommand, "tc");
+
+    final BrigadierCommand serverListCommand = ServerListConsoleCommand.create(this);
+    registerCommand(commandManager, serverListCommand, "servers");
+
+    final BrigadierCommand minigamesCommand = MinigamesCMD.create(minigamesManager);
+
+    commandManager.register(
+            commandManager.metaBuilder("minigames")
+                    .plugin(VelocityVirtualPlugin.INSTANCE)
+                    .build(),
+            minigamesCommand
+    );
+
+
 
     new GlistCommand(this).register();
     new SendCommand(this).register();
+  }
+
+  private void registerCommand(VelocityCommandManager commandManager,BrigadierCommand command, String... aliases) {
+    commandManager.register(
+            commandManager.metaBuilder(command)
+                    .plugin(VelocityVirtualPlugin.INSTANCE)
+                    .aliases(aliases)
+                    .build(),
+            command
+    );
   }
 
 
@@ -552,15 +593,7 @@ public class VelocityServer implements ProxyServer, ForwardingAudience {
     return this.cm.backendChannelInitializer.get();
   }
 
-  public ServerListPingHandler getServerListPingHandler() {
-    return serverListPingHandler;
-  }
-
-  public boolean isShutdown() {
-    return shutdown;
-  }
-
-  /**
+    /**
    * Reloads the proxy's configuration.
    *
    * @return {@code true} if successful, {@code false} if we can't read the configuration
@@ -592,6 +625,8 @@ public class VelocityServer implements ProxyServer, ForwardingAudience {
         servers.register(newInfo);
       }
     }
+
+
 
     if (!evacuate.isEmpty()) {
       CountDownLatch latch = new CountDownLatch(evacuate.size());
@@ -927,11 +962,7 @@ public class VelocityServer implements ProxyServer, ForwardingAudience {
     return scheduler;
   }
 
-  public SallyLabsPatchManager getSallyLabsPatchManager() {
-    return sallyLabsPatchManager;
-  }
-
-  @Override
+    @Override
   public VelocityChannelRegistrar getChannelRegistrar() {
     return channelRegistrar;
   }
@@ -991,45 +1022,5 @@ public class VelocityServer implements ProxyServer, ForwardingAudience {
   @Override
   public ResourcePackInfo.Builder createResourcePackBuilder(String url) {
     return new VelocityResourcePackInfo.BuilderImpl(url);
-  }
-
-  public ConfigManager getConfigManager() {
-    return configManager;
-  }
-
-  public JsonConfig getLobbyCfg() {
-    return lobbyCfg;
-  }
-
-  public JsonConfig getMysqlCfg() {
-    return mysqlCfg;
-  }
-
-  public JsonConfig getConfigCfg() {
-    return configCfg;
-  }
-
-  public MySQLManager getMySQLManager() {
-    return mySQLManager;
-  }
-
-  public static Component getPREFIX() {
-    return PREFIX;
-  }
-
-  public static Component getPREFIX2() {
-    return PREFIX2;
-  }
-
-  public PlayerManager getPlayerManager() {
-    return playerManager;
-  }
-
-  public PlaytimeManager getPlaytimeManager() {
-    return playtimeManager;
-  }
-
-  public static org.slf4j.Logger getLabyLogger() {
-    return labyLogger;
   }
 }

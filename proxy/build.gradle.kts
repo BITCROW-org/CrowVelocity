@@ -142,6 +142,9 @@ dependencies {
     compileOnly("net.labymod.serverapi:core:1.0.10")
     implementation("net.labymod.serverapi:server-velocity:1.0.10")
 
+    compileOnly("org.projectlombok:lombok:1.18.34")
+    annotationProcessor("org.projectlombok:lombok:1.18.34")
+
     implementation(libs.bundles.log4j)
     implementation(libs.kyori.ansi)
     implementation(libs.netty.codec)
